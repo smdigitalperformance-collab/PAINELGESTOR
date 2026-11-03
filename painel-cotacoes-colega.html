@@ -1,0 +1,2383 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Cotações</title>
+<style>
+  :root{
+    --bg:#15110d;
+    --panel:#1d1814;
+    --panel-2:#241e19;
+    --panel-3:#2a231d;
+    --line:#3a3028;
+    --text:#f2ede8;
+    --muted:#a39a90;
+    --accent:#ff8a3d;
+    --accent-dim:#c9651f;
+    --warn:#ffd24d;
+    --danger:#ff6b5e;
+    --ok:#5fe3a3;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    min-height:100vh;
+    padding:28px 20px 60px;
+  }
+  .wrap{max-width:1600px; margin:0 auto;}
+  header{
+    display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px;
+    margin-bottom:26px; padding-bottom:18px; border-bottom:1px solid var(--line);
+  }
+  .title-block .eyebrow{
+    font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--accent-dim); font-weight:700;
+  }
+  h1{
+    font-family:Georgia, 'Times New Roman', serif;
+    font-size:32px; margin:4px 0 0; font-weight:600; letter-spacing:-.01em;
+  }
+  .stats{display:flex; gap:22px; flex-wrap:wrap;}
+  .stat{text-align:right;}
+  .stat .num{font-size:22px; font-weight:700; font-family:Georgia, serif;}
+  .stat .num.saving{color:var(--ok);}
+  .stat .lbl{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em;}
+  .toolbar{display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; align-items:center;}
+  button.primary{
+    background:var(--accent); color:#0c1210; border:none; padding:10px 18px; border-radius:8px;
+    font-weight:700; cursor:pointer; font-size:14px;
+  }
+  button.primary:hover{background:#ffa566;}
+  button.ghost{
+    background:transparent; color:var(--muted); border:1px solid var(--line); padding:9px 14px; border-radius:8px;
+    cursor:pointer; font-size:13px;
+  }
+  button.ghost:hover{color:var(--text); border-color:var(--muted);}
+  .board{
+    display:grid;
+    grid-template-columns:repeat(5, minmax(230px, 1fr));
+    gap:12px;
+    overflow-x:auto;
+    transition:opacity .2s;
+  }
+  @media (max-width: 1200px){ .board{grid-template-columns:repeat(5, minmax(230px, 1fr)); } .wrap{overflow-x:auto;} }
+  @media (max-width: 700px){ .board{grid-template-columns:1fr;} }
+  .col{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    min-height:200px; display:flex; flex-direction:column;
+  }
+  .col-head{
+    padding:14px 14px; display:flex; justify-content:space-between; align-items:center;
+    border-bottom:1px solid var(--line);
+  }
+  .col-head .name{font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.05em;}
+  .col-head .count{
+    background:var(--panel-2); color:var(--muted); font-size:11px; padding:2px 8px; border-radius:20px;
+  }
+  .col[data-status="enviada"] .col-head .name{color:#9fc2ff;}
+  .col[data-status="analise"] .col-head .name{color:var(--warn);}
+  .col[data-status="finalizacao"] .col-head .name{color:#c9a8ff;}
+  .col[data-status="aprovada"] .col-head .name{color:var(--ok);}
+  .col[data-status="perdida"] .col-head .name{color:var(--danger);}
+  .col-body{padding:10px; display:flex; flex-direction:column; gap:10px; flex:1; min-height:80px;}
+  .card{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:12px;
+    cursor:grab; position:relative; transition:border-color .15s;
+  }
+  .card:hover{border-color:var(--accent-dim);}
+  .card.dragging{opacity:.4;}
+  .card .produto{font-weight:700; font-size:14.5px; margin-bottom:8px; padding-right:44px;}
+  .card .fornecedores{display:flex; flex-direction:column; gap:5px; margin-bottom:8px;}
+  .forn-row{
+    display:flex; justify-content:space-between; align-items:baseline; gap:8px;
+    font-size:12px; padding:4px 7px; border-radius:5px; background:var(--panel-3);
+  }
+  .forn-row.fechado{outline:1px solid var(--ok);}
+  .forn-row.menor .forn-preco{color:var(--accent);}
+  .forn-nome{color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .forn-tag{font-size:9px; color:var(--ok); font-weight:700; text-transform:uppercase; margin-left:5px;}
+  .forn-preco{color:var(--muted); font-weight:700; white-space:nowrap;}
+  .forn-cond{font-size:10.5px; color:var(--muted); padding:0 7px; margin-top:-3px; margin-bottom:2px;}
+  .card .meta{display:flex; justify-content:space-between; align-items:center; font-size:11px; margin-top:6px;}
+  .card .prazo{color:var(--muted);}
+  .card .prazo.late{color:var(--danger); font-weight:700;}
+  .card .saving-badge{
+    display:inline-block; background:rgba(95,227,163,.15); color:var(--ok); font-size:11px;
+    font-weight:700; padding:3px 8px; border-radius:6px; margin-top:6px;
+  }
+  .card .actions{position:absolute; top:8px; right:8px; display:flex; gap:2px;}
+  .card .actions button{
+    background:none; border:none; color:var(--muted); cursor:pointer; font-size:14px; padding:2px 5px; line-height:1;
+  }
+  .card .actions button:hover{color:var(--text);}
+  .card .actions .del:hover{color:var(--danger);}
+  .empty-hint{color:var(--muted); font-size:12px; text-align:center; padding:20px 10px; opacity:.6;}
+  .drop-zone{outline:2px dashed var(--accent-dim); outline-offset:-4px; border-radius:8px;}
+
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(6,8,6,.7); display:none; align-items:center; justify-content:center;
+    z-index:100; padding:20px; overflow-y:auto;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px;
+    width:100%; max-width:520px; max-height:90vh; overflow-y:auto;
+  }
+  .modal h2{margin:0 0 18px; font-family:Georgia, serif; font-size:20px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:.05em;}
+  .field input, .field textarea{
+    width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text);
+    padding:9px 10px; border-radius:6px; font-size:14px; font-family:inherit;
+  }
+  .field input:focus, .field textarea:focus{outline:none; border-color:var(--accent-dim);}
+  .field textarea{resize:vertical; min-height:40px;}
+  .modal-actions{display:flex; justify-content:flex-end; gap:10px; margin-top:20px;}
+
+  .fornecedores-section{border-top:1px solid var(--line); padding-top:14px; margin-top:4px;}
+  .fornecedores-section > label{display:block; font-size:12px; color:var(--muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:.05em;}
+  .forn-edit-row{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:8px;
+    position:relative;
+  }
+  .forn-edit-row .grid2{display:grid; grid-template-columns:1fr 110px; gap:8px; margin-bottom:6px;}
+  .forn-edit-row .grid3{display:grid; grid-template-columns:70px 1fr 110px; gap:8px; margin-bottom:6px; align-items:center;}
+  .forn-edit-row .forn-total-display{
+    background:var(--panel-3); border:1px solid var(--line); color:var(--accent); font-weight:700;
+    padding:7px 8px; border-radius:6px; font-size:13px; text-align:right;
+  }
+  .forn-edit-row input[type="text"], .forn-edit-row textarea{
+    width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text);
+    padding:7px 8px; border-radius:6px; font-size:13px; font-family:inherit;
+  }
+  .forn-edit-row textarea{min-height:32px; resize:vertical;}
+  .forn-edit-row .row-bottom{display:flex; justify-content:space-between; align-items:center; margin-top:6px;}
+  .forn-edit-row .fechado-toggle{display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--muted); cursor:pointer;}
+  .forn-edit-row .fechado-toggle input{width:14px; height:14px;}
+  .forn-edit-row .remove-forn{background:none; border:none; color:var(--muted); cursor:pointer; font-size:13px;}
+  .forn-edit-row .remove-forn:hover{color:var(--danger);}
+  .btn-add-forn{
+    background:var(--panel-3); border:1px dashed var(--line); color:var(--muted); width:100%;
+    padding:8px; border-radius:6px; cursor:pointer; font-size:12.5px; margin-top:2px;
+  }
+  .btn-add-forn:hover{color:var(--text); border-color:var(--accent-dim);}
+  .mes-header{
+    display:flex; justify-content:space-between; align-items:center; font-size:11px; font-weight:700;
+    text-transform:uppercase; letter-spacing:.06em; color:var(--accent); padding:4px 2px;
+    border-bottom:1px solid var(--line); margin-top:4px;
+  }
+  .mes-header{cursor:pointer; user-select:none;}
+  .mes-header:hover{color:var(--text);}
+  .mes-header .mes-seta{display:inline-block; width:12px; font-size:9px;}
+  .mes-header .mes-count{background:var(--panel-3); color:var(--muted); border-radius:10px; padding:1px 7px; font-size:10.5px;}
+  .rq-board{display:grid; grid-template-columns:repeat(6, minmax(230px, 1fr)); gap:12px; overflow-x:auto;}
+  @media (max-width: 700px){ .rq-board{grid-template-columns:1fr;} }
+  .rq-input{background:var(--bg); border:1px solid var(--line); color:var(--text); padding:9px 10px; border-radius:6px; font-size:13px; font-family:inherit;}
+  .rq-grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .rq-card{cursor:pointer;}
+  .rq-card .produto{padding-right:0; font-size:13.5px;}
+  .rq-card .rq-meta{font-size:11.5px; color:var(--muted); line-height:1.5;}
+  .rq-card .rq-meta strong{color:var(--text); font-weight:600;}
+  .rq-tag{display:inline-block; font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; margin-bottom:6px;}
+  .rq-tag.urgente{background:rgba(255,107,107,.15); color:var(--danger);}
+  .rq-tag.normal{background:var(--panel-3); color:var(--muted);}
+  .rq-tag.cotar{background:rgba(95,227,163,.15); color:var(--ok);}
+  .rq-thumbs{display:flex; gap:4px; margin-top:6px;}
+  .rq-thumbs img{width:44px; height:44px; object-fit:cover; border-radius:5px; border:1px solid var(--line);}
+  .rq-item{background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:8px;}
+  .rq-item input[type="text"], .rq-item input[type="number"], .rq-item input[type="url"]{
+    width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text);
+    padding:7px 8px; border-radius:6px; font-size:13px; font-family:inherit; margin-bottom:6px;
+  }
+  .rq-item .rq-row3{display:grid; grid-template-columns:1fr 90px 90px; gap:8px;}
+  .rq-item .rq-item-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:12px; color:var(--muted);}
+  .rq-item .rq-linkrow{display:flex; gap:6px;}
+  .rq-item .rq-mini{background:none; border:none; color:var(--muted); cursor:pointer; font-size:12px;}
+  .rq-item .rq-mini:hover{color:var(--accent);}
+  .rq-item .rq-mini.danger:hover{color:var(--danger);}
+  .rq-photos{display:flex; gap:6px; flex-wrap:wrap; margin:6px 0;}
+  .rq-photo{position:relative;}
+  .rq-photo img{width:64px; height:64px; object-fit:cover; border-radius:6px; border:1px solid var(--line);}
+  .rq-photo button{position:absolute; top:-6px; right:-6px; background:var(--danger); color:#fff; border:none; border-radius:50%; width:18px; height:18px; cursor:pointer; font-size:11px; line-height:1;}
+  .rq-detail-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:10px 0 14px; font-size:13px;}
+  .rq-detail-grid .lbl{font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;}
+  .rq-detail-photos{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
+  .rq-detail-photos img{width:110px; height:110px; object-fit:cover; border-radius:8px; border:1px solid var(--line);}
+  .rq-links a{display:block; color:var(--accent); font-size:12.5px; word-break:break-all; margin-top:4px;}
+  .btn-copy-produtos{
+    background:none; border:1px dashed var(--line); color:var(--muted); width:100%;
+    padding:6px; border-radius:6px; cursor:pointer; font-size:11.5px; margin-bottom:8px;
+  }
+  .btn-copy-produtos:hover{color:var(--text); border-color:var(--accent-dim);}
+  .forn-edit-row .produto-extra{display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; margin-top:6px;}
+  .forn-edit-row .produto-extra input[type="text"]{margin-bottom:0;}
+  .forn-edit-row .produtos-list{margin-bottom:6px;}
+  .forn-edit-row .produto-row{
+    background:var(--panel-3); border:1px solid var(--line); border-radius:6px; padding:8px; margin-bottom:6px;
+  }
+  .forn-edit-row .produto-row input[type="text"]{margin-bottom:6px;}
+  .forn-edit-row .produto-row .produto-grid{display:grid; grid-template-columns:60px 1fr 90px 22px; gap:6px; align-items:center;}
+  .forn-edit-row .produto-row .produto-subtotal{
+    background:var(--bg); border:1px solid var(--line); color:var(--accent); font-weight:700;
+    padding:7px 6px; border-radius:6px; font-size:12px; text-align:right;
+  }
+  .forn-edit-row .remove-produto{background:none; border:none; color:var(--muted); cursor:pointer; font-size:15px; line-height:1; padding:0;}
+  .forn-edit-row .remove-produto:hover{color:var(--danger);}
+  .btn-add-produto{
+    background:none; border:1px dashed var(--line); color:var(--muted); width:100%;
+    padding:6px; border-radius:6px; cursor:pointer; font-size:11.5px; margin-bottom:8px;
+  }
+  .btn-add-produto:hover{color:var(--text); border-color:var(--accent-dim);}
+  .forn-total-row{
+    display:flex; justify-content:space-between; align-items:center; background:var(--panel-3);
+    border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin-bottom:8px;
+    font-weight:700; color:var(--accent); font-size:13px;
+  }
+  .saving-hint{font-size:11px; color:var(--ok); margin-top:4px;}
+  .sync-dot{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; vertical-align:middle;}
+  .sync-dot.online{background:var(--ok);}
+  .sync-dot.offline{background:var(--danger);}
+  .sync-dot.loading{background:var(--warn);}
+  .stat.excel-input{text-align:right; position:relative;}
+  .stat.excel-input input{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--ok); font-weight:700;
+    font-family:Georgia, serif; font-size:16px; text-align:right; width:110px; padding:3px 6px;
+    border-radius:6px;
+  }
+  .stat.excel-input input:focus{outline:none; border-color:var(--accent-dim);}
+  .stat.total-geral .num{color:var(--accent); font-size:24px;}
+  .meta-block{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:14px 18px; margin-bottom:20px; display:flex; align-items:center; gap:20px; flex-wrap:wrap;
+  }
+  .meta-block .meta-label{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:4px;}
+  .meta-block .meta-input-wrap input{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--warn); font-weight:700;
+    font-family:Georgia, serif; font-size:16px; text-align:right; width:130px; padding:4px 8px; border-radius:6px;
+  }
+  .meta-block .meta-input-wrap input:focus{outline:none; border-color:var(--accent-dim);}
+  .meta-bar-wrap{flex:1; min-width:200px;}
+  .meta-bar-track{
+    background:var(--panel-2); border-radius:20px; height:14px; overflow:hidden; position:relative;
+  }
+  .meta-bar-fill{
+    background:linear-gradient(90deg, var(--accent-dim), var(--accent)); height:100%; border-radius:20px;
+    transition:width .3s;
+  }
+  .meta-pct{font-size:13px; font-weight:700; color:var(--accent); white-space:nowrap;}
+  .login-overlay{
+    position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center;
+    z-index:200;
+  }
+  .login-box{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:32px;
+    width:100%; max-width:340px;
+  }
+  .login-box h2{font-family:Georgia, serif; margin:0 0 6px; font-size:22px;}
+  .login-box p.sub{color:var(--muted); font-size:12.5px; margin:0 0 20px;}
+  .login-box .field{margin-bottom:12px;}
+  .login-box .field label{display:block; font-size:11px; color:var(--muted); margin-bottom:4px; text-transform:uppercase; letter-spacing:.05em;}
+  .login-box input{
+    width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text);
+    padding:9px 10px; border-radius:6px; font-size:14px;
+  }
+  .login-box input:focus{outline:none; border-color:var(--accent-dim);}
+  .login-box button{
+    width:100%; background:var(--accent); color:#0c1210; border:none; padding:10px; border-radius:8px;
+    font-weight:700; cursor:pointer; font-size:14px; margin-top:6px;
+  }
+  .login-box button:hover{background:#ffa566;}
+  .login-error{color:var(--danger); font-size:12px; margin-top:10px; min-height:14px;}
+  .app-hidden{display:none !important;}
+  .logout-btn{
+    background:transparent; border:1px solid var(--line); color:var(--muted); padding:6px 12px;
+    border-radius:8px; cursor:pointer; font-size:12px;
+  }
+  .logout-btn:hover{color:var(--text); border-color:var(--muted);}
+  .menu-screen{
+    min-height:80vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px;
+  }
+  .menu-screen .menu-title{text-align:center;}
+  .menu-screen .menu-title .eyebrow{font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--accent-dim); font-weight:700;}
+  .menu-screen .menu-title h1{margin:6px 0 0;}
+  .menu-cards{display:flex; gap:18px; flex-wrap:wrap; justify-content:center;}
+  .menu-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:32px 36px;
+    width:220px; text-align:center; cursor:pointer; transition:border-color .15s, transform .15s;
+  }
+  .menu-card:hover{border-color:var(--accent-dim); transform:translateY(-3px);}
+  .menu-card .icon{font-size:32px; margin-bottom:14px;}
+  .menu-card .label{font-weight:700; font-size:15px;}
+  .menu-card .desc{color:var(--muted); font-size:12px; margin-top:6px;}
+  .back-to-menu{
+    background:transparent; border:1px solid var(--line); color:var(--muted); padding:7px 14px;
+    border-radius:8px; cursor:pointer; font-size:12.5px; margin-bottom:16px;
+  }
+  .back-to-menu:hover{color:var(--text); border-color:var(--muted);}
+  .relatorios-placeholder{
+    min-height:60vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:var(--muted); text-align:center; gap:8px;
+  }
+  .relatorios-placeholder .icon{font-size:36px; margin-bottom:6px;}
+  .rel-header{display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px; margin-bottom:22px;}
+  .rel-controls{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+  .rel-controls select, .rel-controls input[type="month"], .rel-controls input[type="number"]{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:8px 10px;
+    border-radius:8px; font-size:13px;
+  }
+  .rel-toggle{display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden;}
+  .rel-toggle button{
+    background:var(--panel-2); border:none; color:var(--muted); padding:8px 16px; cursor:pointer; font-size:13px; font-weight:700;
+  }
+  .rel-toggle button.active{background:var(--accent); color:#0c1210;}
+  .rel-cards{display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px; margin-bottom:24px;}
+  .rel-card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px;}
+  .rel-card .lbl{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px;}
+  .rel-card .val{font-family:Georgia, serif; font-size:26px; font-weight:700;}
+  .rel-card.gasto .val{color:var(--warn);}
+  .rel-card.economia .val{color:var(--ok);}
+  .rel-table{width:100%; border-collapse:collapse; font-size:13px;}
+  .rel-table th{
+    text-align:left; padding:10px 12px; color:var(--muted); font-size:11px; text-transform:uppercase;
+    letter-spacing:.05em; border-bottom:1px solid var(--line);
+  }
+  .rel-table td{padding:10px 12px; border-bottom:1px solid var(--line);}
+  .rel-table tr:hover td{background:var(--panel-2);}
+  .rel-empty{color:var(--muted); text-align:center; padding:30px; font-size:13px;}
+  .forn-add-row{display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;}
+  .forn-add-row input{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:9px 10px;
+    border-radius:8px; font-size:13px;
+  }
+  .forn-add-row input:first-child{flex:1; min-width:180px;}
+  .forn-add-row input:nth-child(2){flex:1; min-width:180px;}
+  .forn-cadastro-list{display:flex; flex-direction:column; gap:8px;}
+  .forn-cadastro-item{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 16px;
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+  }
+  .forn-cadastro-item .fc-nome{font-weight:700; font-size:14px;}
+  .forn-cadastro-item .fc-contato{color:var(--muted); font-size:12px; margin-top:2px;}
+  .forn-cadastro-item .fc-del{
+    background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; padding:4px 8px;
+  }
+  .forn-cadastro-item .fc-del:hover{color:var(--danger);}
+  #print-area{display:none;}
+  @media print{
+    body *{ visibility:hidden; }
+    #print-area, #print-area *{ visibility:visible; }
+    #print-area{
+      display:block; position:absolute; top:0; left:0; width:100%; padding:20px;
+      background:#fff; color:#111; font-family:Arial, sans-serif;
+    }
+    #print-area h1{font-size:20px; margin-bottom:2px;}
+    #print-area .print-sub{color:#555; font-size:12px; margin-bottom:18px;}
+    #print-area table{width:100%; border-collapse:collapse; margin-top:10px;}
+    #print-area th, #print-area td{border:1px solid #ccc; padding:8px; font-size:12px; text-align:left;}
+    #print-area th{background:#f0f0f0;}
+    #print-area .print-fechado{font-weight:bold; color:#0a7a3f;}
+    #print-area .print-menor-preco{background:#fff3b0 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    #print-area .print-menor-preco td{font-weight:bold;}
+    #print-area .print-menor-tag{
+      display:inline-block; background:#0a7a3f; color:#fff; font-size:9px; font-weight:bold;
+      padding:2px 6px; border-radius:4px; margin-left:6px; letter-spacing:.03em; vertical-align:middle;
+    }
+    #print-area .print-signature{
+      margin-top:60px; display:flex; justify-content:space-between; gap:24px;
+    }
+    #print-area .print-signature div{
+      flex:1; text-align:center; border-top:1px solid #333; padding-top:6px; font-size:11.5px; color:#333;
+    }
+    #print-area .print-date{margin-top:22px; font-size:12px; color:#333;}
+    #print-area .print-footer{margin-top:24px; font-size:11px; color:#777;}
+    #print-area .print-page{page-break-after:always; break-after:page; page-break-inside:avoid;}
+    #print-area .print-page-last{page-break-after:auto; break-after:auto;}
+    #print-area .print-page-head{font-size:11px; color:#777; border-bottom:1px solid #ddd; padding-bottom:4px; margin-bottom:14px;}
+    #print-area .print-produto-titulo{font-size:17px; margin:14px 0 6px;}
+    #print-area .print-forn-block{margin-top:22px; page-break-inside:avoid;}
+    #print-area .print-forn-block h3{font-size:14px; margin:0 0 6px;}
+    #print-area .print-forn-total{text-align:right; font-weight:bold; font-size:12.5px; margin-top:4px;}
+    #print-area .print-forn-block.print-menor-preco{background:#fffbe0; padding:10px; border:1px solid #fff3b0; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+  }
+  body.readonly-mode #btn-new,
+  body.readonly-mode #btn-import,
+  body.readonly-mode #btn-reset,
+  body.readonly-mode #btn-arquivar,
+  body.readonly-mode .card .edit,
+  body.readonly-mode .card .del,
+  body.readonly-mode .forn-add-row,
+  body.readonly-mode .fc-del{
+    display:none !important;
+  }
+  body.readonly-mode #input-economia-excel,
+  body.readonly-mode #input-meta-pessoal{
+    pointer-events:none; background:transparent; border-color:transparent;
+  }
+  body.readonly-mode .card{cursor:default;}
+  .readonly-badge{
+    display:none; font-size:10.5px; color:var(--warn); background:rgba(255,179,71,.12);
+    padding:3px 9px; border-radius:20px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+  }
+  body.readonly-mode .readonly-badge{display:inline-block;}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+<div class="login-overlay" id="login-overlay">
+  <div class="login-box">
+    <h2>Painel de Cotações</h2>
+    <p class="sub">Faça login para acessar</p>
+    <div class="field">
+      <label>E-mail</label>
+      <input type="email" id="login-email" placeholder="seu@email.com">
+    </div>
+    <div class="field">
+      <label>Senha</label>
+      <input type="password" id="login-senha" placeholder="••••••••">
+    </div>
+    <button id="btn-login">Entrar</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<div class="wrap app-hidden" id="menu-screen">
+  <div class="menu-screen">
+    <div class="menu-title">
+      <div class="eyebrow">Compras · Fornecedores</div>
+      <h1>Painel de Cotações</h1>
+    </div>
+    <div class="menu-cards">
+      <div class="menu-card" id="menu-btn-painel">
+        <div class="icon">📋</div>
+        <div class="label">Painel de Cotações</div>
+        <div class="desc">Kanban de cotações em andamento</div>
+      </div>
+      <div class="menu-card" id="menu-btn-relatorios">
+        <div class="icon">📊</div>
+        <div class="label">Relatórios</div>
+        <div class="desc">Economias por mês ou ano</div>
+      </div>
+      <div class="menu-card" id="menu-btn-requisicoes">
+        <div class="icon">📝</div>
+        <div class="label">Requisições</div>
+        <div class="desc">Pedidos de compra com fotos e links</div>
+      </div>
+      <div class="menu-card" id="menu-btn-fornecedores">
+        <div class="icon">🏢</div>
+        <div class="label">Fornecedores</div>
+        <div class="desc">Cadastro para reaproveitar nas cotações</div>
+      </div>
+    </div>
+    <button class="logout-btn" id="btn-logout-menu">Sair</button>
+  </div>
+</div>
+
+<div class="wrap app-hidden" id="relatorios-screen">
+  <button class="back-to-menu" id="back-to-menu-relatorios">← Voltar ao menu</button>
+  <div class="rel-header">
+    <div>
+      <div class="eyebrow">Compras · Fornecedores</div>
+      <h1 style="margin-top:4px;">Relatório de Economias</h1>
+    </div>
+    <div class="rel-controls">
+      <div class="rel-toggle">
+        <button id="rel-btn-mensal" class="active">Mensal</button>
+        <button id="rel-btn-anual">Anual</button>
+      </div>
+      <input type="month" id="rel-mes">
+      <input type="number" id="rel-ano" min="2020" max="2100" style="width:90px;">
+      <button class="ghost" id="rel-btn-pdf">⬇ PDF</button>
+      <button class="ghost" id="rel-btn-excel">⬇ Excel</button>
+    </div>
+  </div>
+
+  <div class="rel-cards">
+    <div class="rel-card">
+      <div class="lbl">Cotações aprovadas</div>
+      <div class="val" id="rel-qtd">0</div>
+    </div>
+    <div class="rel-card gasto">
+      <div class="lbl">Valor gasto (fechado)</div>
+      <div class="val" id="rel-gasto">R$ 0,00</div>
+    </div>
+    <div class="rel-card economia">
+      <div class="lbl">Economia gerada</div>
+      <div class="val" id="rel-economia">R$ 0,00</div>
+    </div>
+  </div>
+
+  <table class="rel-table" id="rel-table">
+    <thead>
+      <tr><th>Produto</th><th>Data</th><th>Fornecedor fechado</th><th>Valor gasto</th><th>Economia</th></tr>
+    </thead>
+    <tbody id="rel-table-body"></tbody>
+  </table>
+  <div class="rel-empty app-hidden" id="rel-empty">Nenhuma cotação aprovada nesse período.</div>
+</div>
+
+<div class="wrap app-hidden" id="requisicoes-screen">
+  <button class="back-to-menu" id="back-to-menu-requisicoes">← Voltar ao menu</button>
+  <div class="rel-header">
+    <div>
+      <div class="eyebrow">Compras · Requisições</div>
+      <h1 style="margin-top:4px;">Requisições de Compra</h1>
+      <div id="rq-sync" style="font-size:11px; color:var(--muted); margin-top:6px;">Conectando...</div>
+    </div>
+    <button class="logout-btn" id="btn-logout-rq">Sair</button>
+  </div>
+  <div class="toolbar">
+    <button class="primary" id="rq-btn-new">+ Nova requisição</button>
+    <input type="text" id="rq-search" class="rq-input" placeholder="Buscar produto, equipamento...">
+    <select id="rq-filter-prio" class="rq-input">
+      <option value="">Todas as prioridades</option>
+      <option value="urgente">Urgente</option>
+      <option value="normal">Normal</option>
+      <option value="cotar">Pode aguardar cotação</option>
+    </select>
+    <button class="ghost" id="rq-btn-excel">⬇ Excel</button>
+  </div>
+  <div class="rq-board" id="rq-board"></div>
+</div>
+
+<div class="modal-overlay" id="rq-form-overlay">
+  <div class="modal" style="max-width:640px;">
+    <h2 id="rq-form-title">Nova requisição</h2>
+    <div class="field"><label>Solicitante</label><input type="text" id="rq-f-solicitante"></div>
+    <div class="field"><label>Equipamento / máquina / veículo</label><input type="text" id="rq-f-equipamento" placeholder="Ex: Trator John Deere 6110, Caminhão Volvo FH..."></div>
+    <div class="rq-grid2">
+      <div class="field"><label>Prioridade</label>
+        <select id="rq-f-prio" class="rq-input" style="width:100%;">
+          <option value="normal">Normal</option>
+          <option value="urgente">Urgente</option>
+          <option value="cotar">Pode aguardar cotação</option>
+        </select>
+      </div>
+      <div class="field"><label>Necessário até</label><input type="date" id="rq-f-data"></div>
+    </div>
+    <div class="fornecedores-section">
+      <label>Itens (produto, quantidade, links e fotos)</label>
+      <div id="rq-items"></div>
+      <button type="button" class="btn-add-forn" id="rq-add-item">+ Adicionar item</button>
+    </div>
+    <div class="field" style="margin-top:14px;"><label>Observação</label><textarea id="rq-f-obs" placeholder="Detalhes que ajudam a cotar mais rápido"></textarea></div>
+    <div class="saving-hint" id="rq-form-state"></div>
+    <div class="modal-actions">
+      <button class="ghost" id="rq-cancel">Cancelar</button>
+      <button class="primary" id="rq-save">Enviar para Compras</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="rq-detail-overlay">
+  <div class="modal" style="max-width:680px;" id="rq-detail"></div>
+</div>
+
+<div class="wrap app-hidden" id="fornecedores-screen">
+  <button class="back-to-menu" id="back-to-menu-fornecedores">← Voltar ao menu</button>
+  <div class="rel-header">
+    <div>
+      <div class="eyebrow">Compras · Fornecedores</div>
+      <h1 style="margin-top:4px;">Cadastro de Fornecedores</h1>
+    </div>
+  </div>
+
+  <div class="forn-add-row">
+    <input type="text" id="fc-nome-input" placeholder="Nome do fornecedor">
+    <input type="text" id="fc-contato-input" placeholder="Contato (telefone, e-mail...) — opcional">
+    <button class="primary" id="fc-btn-add">+ Adicionar</button>
+  </div>
+
+  <div class="forn-cadastro-list" id="fc-list"></div>
+  <div class="rel-empty app-hidden" id="fc-empty">Nenhum fornecedor cadastrado ainda. Eles também são adicionados automaticamente conforme você usa nas cotações.</div>
+</div>
+
+<div class="wrap app-hidden" id="app-content">
+  <header>
+    <div class="title-block">
+      <button class="back-to-menu" id="back-to-menu-painel">← Voltar ao menu</button>
+      <div class="eyebrow">Compras · Fornecedores</div>
+      <h1>Painel de Cotações</h1>
+      <div id="storage-notice" style="font-size:11px; color:var(--muted); margin-top:6px;"><span class="sync-dot loading" id="sync-dot"></span>Conectando...</div>
+      <span class="readonly-badge">Somente leitura</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+      <div class="stats" id="stats"></div>
+      <button class="logout-btn" id="btn-logout">Sair</button>
+    </div>
+  </header>
+
+  <div class="meta-block" id="meta-block">
+    <div>
+      <div class="meta-label">Meta pessoal</div>
+      <div class="meta-input-wrap">R$ <input type="text" id="input-meta-pessoal" value="0,00"></div>
+    </div>
+    <div class="meta-bar-wrap">
+      <div class="meta-bar-track"><div class="meta-bar-fill" id="meta-bar-fill" style="width:0%"></div></div>
+    </div>
+    <div class="meta-pct" id="meta-pct">0%</div>
+  </div>
+
+  <div class="toolbar">
+    <button class="primary" id="btn-new">+ Nova cotação</button>
+    <button class="ghost" id="btn-export">⬇ Exportar dados</button>
+    <button class="ghost" id="btn-import">⬆ Importar dados</button>
+    <input type="file" id="input-import" accept="application/json" style="display:none;">
+    <button class="ghost" id="btn-arquivar">📦 Arquivar ano</button>
+    <button class="ghost" id="btn-reset">Limpar tudo</button>
+  </div>
+
+  <div class="board" id="board">
+    <div class="col" data-status="enviada">
+      <div class="col-head"><span class="name">Enviada</span><span class="count" id="count-enviada">0</span></div>
+      <div class="col-body" id="body-enviada"></div>
+    </div>
+    <div class="col" data-status="analise">
+      <div class="col-head"><span class="name">Em análise</span><span class="count" id="count-analise">0</span></div>
+      <div class="col-body" id="body-analise"></div>
+    </div>
+    <div class="col" data-status="finalizacao">
+      <div class="col-head"><span class="name">Finalização</span><span class="count" id="count-finalizacao">0</span></div>
+      <div class="col-body" id="body-finalizacao"></div>
+    </div>
+    <div class="col" data-status="aprovada">
+      <div class="col-head"><span class="name">Aprovada</span><span class="count" id="count-aprovada">0</span></div>
+      <div class="col-body" id="body-aprovada"></div>
+    </div>
+    <div class="col" data-status="perdida">
+      <div class="col-head"><span class="name">Perdida / Recusada</span><span class="count" id="count-perdida">0</span></div>
+      <div class="col-body" id="body-perdida"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h2 id="modal-title">Nova cotação</h2>
+    <div class="field">
+      <label>Produto</label>
+      <input type="text" id="f-produto" placeholder="Ex: Defensivo X 200L">
+    </div>
+    <div class="field">
+      <label>Prazo de resposta</label>
+      <input type="date" id="f-prazo">
+    </div>
+
+    <div class="fornecedores-section">
+      <label>Fornecedores e condições</label>
+      <div id="forn-list"></div>
+      <button type="button" class="btn-add-forn" id="btn-add-forn">+ Adicionar fornecedor</button>
+    </div>
+
+    <div class="field" style="margin-top:14px;">
+      <label>Preço final negociado (opcional)</label>
+      <input type="text" id="f-preco-negociado" placeholder="Preencha se conseguiu melhorar o preço do fornecedor fechado">
+      <div class="saving-hint" id="saving-hint"></div>
+    </div>
+
+    <div class="field">
+      <label>Data de aprovação (para relatórios)</label>
+      <input type="date" id="f-data-aprovacao">
+    </div>
+
+    <div class="modal-actions">
+      <button class="ghost" id="btn-cancel">Cancelar</button>
+      <button class="primary" id="btn-save">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore, doc, onSnapshot, setDoc, collection, query, where, updateDoc, deleteDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getStorage, ref, uploadBytes, getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+import {
+  getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+// =====================================================================
+// CONFIGURAÇÃO DA EMPRESA — é só isto que muda de um cliente para outro
+// =====================================================================
+// 1) UID do comprador/administrador (único que altera cotações). Firebase > Authentication > Usuários
+const ADMIN_UID = "2VTejljVAQRXNYKvj4pUUVtPllF2";
+// 2) UIDs de quem só enxerga o módulo Requisições (nada de Cotações) — pode deixar vazio: []
+const REQUISITANTE_UIDS = [];
+// 3) Chaves do projeto Firebase da empresa (Firebase > Configurações do projeto > Seus apps)
+const firebaseConfig = {
+  apiKey: "COLE_AQUI",
+  authDomain: "COLE_AQUI",
+  projectId: "COLE_AQUI",
+  storageBucket: "COLE_AQUI",
+  messagingSenderId: "COLE_AQUI",
+  appId: "COLE_AQUI"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+const boardRef = doc(db, "painel", "cotacoes-board");
+const storage = getStorage(app);
+const reqRef = collection(db, "requisicoes");
+
+let isAdmin = false;
+let isRequisitante = false;
+let currentUser = null;
+
+let unsubscribeBoard = null;
+
+onAuthStateChanged(auth, (user) => {
+  const loginOverlay = document.getElementById('login-overlay');
+  const menuScreen = document.getElementById('menu-screen');
+  const appContent = document.getElementById('app-content');
+  const relatoriosScreen = document.getElementById('relatorios-screen');
+  currentUser = user || null;
+  if(user){
+    isAdmin = user.uid === ADMIN_UID;
+    isRequisitante = REQUISITANTE_UIDS.includes(user.uid);
+    document.body.classList.toggle('readonly-mode', !isAdmin);
+    ['menu-btn-painel','menu-btn-relatorios','menu-btn-fornecedores'].forEach(id => {
+      document.getElementById(id).classList.toggle('app-hidden', isRequisitante);
+    });
+    document.getElementById('back-to-menu-requisicoes').classList.toggle('app-hidden', isRequisitante);
+    loginOverlay.classList.add('app-hidden');
+    appContent.classList.add('app-hidden');
+    relatoriosScreen.classList.add('app-hidden');
+    if(isRequisitante){
+      // este usuário nunca carrega os dados de cotações
+      showScreen('requisicoes');
+      startRequisicoesListener();
+    } else {
+      showScreen('menu');
+      if(!unsubscribeBoard){
+        unsubscribeBoard = startBoardListener();
+      }
+    }
+  } else {
+    loginOverlay.classList.remove('app-hidden');
+    menuScreen.classList.add('app-hidden');
+    appContent.classList.add('app-hidden');
+    relatoriosScreen.classList.add('app-hidden');
+    document.getElementById('requisicoes-screen').classList.add('app-hidden');
+    if(unsubscribeBoard){
+      unsubscribeBoard();
+      unsubscribeBoard = null;
+    }
+    stopRequisicoesListener();
+  }
+});
+
+function showScreen(name){
+  document.getElementById('menu-screen').classList.toggle('app-hidden', name !== 'menu');
+  document.getElementById('app-content').classList.toggle('app-hidden', name !== 'painel');
+  document.getElementById('relatorios-screen').classList.toggle('app-hidden', name !== 'relatorios');
+  document.getElementById('fornecedores-screen').classList.toggle('app-hidden', name !== 'fornecedores');
+  document.getElementById('requisicoes-screen').classList.toggle('app-hidden', name !== 'requisicoes');
+}
+
+document.getElementById('menu-btn-painel').addEventListener('click', () => showScreen('painel'));
+document.getElementById('menu-btn-relatorios').addEventListener('click', () => { showScreen('relatorios'); renderRelatorio(); });
+document.getElementById('menu-btn-fornecedores').addEventListener('click', () => { showScreen('fornecedores'); renderFornecedoresCadastro(); });
+document.getElementById('menu-btn-requisicoes').addEventListener('click', () => { showScreen('requisicoes'); startRequisicoesListener(); });
+document.getElementById('back-to-menu-requisicoes').addEventListener('click', () => showScreen('menu'));
+document.getElementById('back-to-menu-painel').addEventListener('click', () => showScreen('menu'));
+document.getElementById('back-to-menu-relatorios').addEventListener('click', () => showScreen('menu'));
+document.getElementById('back-to-menu-fornecedores').addEventListener('click', () => showScreen('menu'));
+
+// ---- Cadastro de fornecedores ----
+function normalizarNome(n){ return (n || '').trim().toLowerCase(); }
+
+function registrarFornecedorSeNovo(nome, admin){
+  if(!admin) return; // só admin escreve
+  const nomeTrim = (nome || '').trim();
+  if(!nomeTrim) return;
+  const jaExiste = fornecedoresCadastrados.some(f => normalizarNome(f.nome) === normalizarNome(nomeTrim));
+  if(!jaExiste){
+    fornecedoresCadastrados.push({ id: uid('fc'), nome: nomeTrim, contato: '' });
+  }
+}
+
+function atualizarDatalistFornecedores(){
+  const datalist = document.getElementById('lista-fornecedores-cadastrados');
+  if(!datalist) return;
+  datalist.innerHTML = fornecedoresCadastrados
+    .map(f => `<option value="${escapeHtml(f.nome)}">`)
+    .join('');
+}
+
+function renderFornecedoresCadastro(){
+  const listEl = document.getElementById('fc-list');
+  const emptyEl = document.getElementById('fc-empty');
+  listEl.innerHTML = '';
+  if(fornecedoresCadastrados.length === 0){
+    emptyEl.classList.remove('app-hidden');
+    return;
+  }
+  emptyEl.classList.add('app-hidden');
+  fornecedoresCadastrados
+    .slice()
+    .sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+    .forEach(f => {
+      const item = document.createElement('div');
+      item.className = 'forn-cadastro-item';
+      item.innerHTML = `
+        <div>
+          <div class="fc-nome">${escapeHtml(f.nome)}</div>
+          ${f.contato ? `<div class="fc-contato">${escapeHtml(f.contato)}</div>` : ''}
+        </div>
+        <button class="fc-del" data-id="${f.id}" title="Remover">×</button>
+      `;
+      item.querySelector('.fc-del').addEventListener('click', () => {
+        fornecedoresCadastrados = fornecedoresCadastrados.filter(x => x.id !== f.id);
+        saveData();
+        renderFornecedoresCadastro();
+      });
+      listEl.appendChild(item);
+    });
+}
+
+document.getElementById('fc-btn-add').addEventListener('click', () => {
+  const nomeInput = document.getElementById('fc-nome-input');
+  const contatoInput = document.getElementById('fc-contato-input');
+  const nome = nomeInput.value.trim();
+  if(!nome){ nomeInput.focus(); return; }
+  const jaExiste = fornecedoresCadastrados.some(f => normalizarNome(f.nome) === normalizarNome(nome));
+  if(jaExiste){
+    alert('Esse fornecedor já está cadastrado.');
+    return;
+  }
+  fornecedoresCadastrados.push({ id: uid('fc'), nome, contato: contatoInput.value.trim() });
+  saveData();
+  nomeInput.value = '';
+  contatoInput.value = '';
+  renderFornecedoresCadastro();
+});
+
+// ---- Relatórios ----
+let relModo = 'mensal';
+
+function initRelatorioControls(){
+  const hoje = new Date();
+  const mesInput = document.getElementById('rel-mes');
+  const anoInput = document.getElementById('rel-ano');
+  if(!mesInput.value){
+    mesInput.value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  }
+  if(!anoInput.value){
+    anoInput.value = hoje.getFullYear();
+  }
+}
+initRelatorioControls();
+
+document.getElementById('rel-btn-mensal').addEventListener('click', () => {
+  relModo = 'mensal';
+  document.getElementById('rel-btn-mensal').classList.add('active');
+  document.getElementById('rel-btn-anual').classList.remove('active');
+  document.getElementById('rel-mes').style.display = '';
+  document.getElementById('rel-ano').style.display = 'none';
+  renderRelatorio();
+});
+document.getElementById('rel-btn-anual').addEventListener('click', () => {
+  relModo = 'anual';
+  document.getElementById('rel-btn-anual').classList.add('active');
+  document.getElementById('rel-btn-mensal').classList.remove('active');
+  document.getElementById('rel-mes').style.display = 'none';
+  document.getElementById('rel-ano').style.display = '';
+  renderRelatorio();
+});
+document.getElementById('rel-mes').addEventListener('change', renderRelatorio);
+document.getElementById('rel-ano').addEventListener('change', renderRelatorio);
+document.getElementById('rel-ano').style.display = 'none';
+
+function calcLinhasRelatorio(lista){
+  let totalGasto = 0;
+  let totalEconomia = 0;
+  const linhas = [];
+  lista.forEach(c => {
+    const fc = fechamentoCotacao(c);
+    const negP = c.precoNegociado ? parsePrice(c.precoNegociado) : null;
+    const valorGasto = (negP !== null) ? negP : (fc.ativo ? fc.valor : 0);
+    const economia = economiaCotacao(c);
+    totalGasto += valorGasto;
+    totalEconomia += economia;
+    linhas.push({
+      produto: c.produto,
+      data: c.dataAprovacaoISO,
+      fornecedor: fc.nomes.length ? fc.nomes.join(', ') : '—',
+      valorGasto,
+      economia
+    });
+  });
+  linhas.sort((a,b) => ((a.data || '') > (b.data || '') ? -1 : 1));
+  return { linhas, totalGasto, totalEconomia };
+}
+
+function aprovadasDoPeriodo(){
+  const mesFiltro = document.getElementById('rel-mes').value; // "YYYY-MM"
+  const anoFiltro = document.getElementById('rel-ano').value; // "YYYY"
+  return cotacoes.filter(c => {
+    if(c.status !== 'aprovada' || !c.dataAprovacaoISO) return false;
+    if(relModo === 'mensal'){
+      return mesFiltro && c.dataAprovacaoISO.startsWith(mesFiltro);
+    } else {
+      return anoFiltro && c.dataAprovacaoISO.startsWith(String(anoFiltro));
+    }
+  });
+}
+
+function rotuloPeriodo(){
+  if(relModo === 'mensal'){
+    const v = document.getElementById('rel-mes').value;
+    if(!v) return '';
+    const [ano, mes] = v.split('-');
+    return mes + '/' + ano;
+  }
+  return document.getElementById('rel-ano').value;
+}
+
+function renderRelatorio(){
+  const aprovadasNoPeriodo = aprovadasDoPeriodo();
+  const { linhas, totalGasto, totalEconomia } = calcLinhasRelatorio(aprovadasNoPeriodo);
+
+  document.getElementById('rel-qtd').textContent = aprovadasNoPeriodo.length;
+  document.getElementById('rel-gasto').textContent = 'R$ ' + formatMoney(totalGasto);
+  document.getElementById('rel-economia').textContent = 'R$ ' + formatMoney(totalEconomia);
+
+  const tbody = document.getElementById('rel-table-body');
+  const table = document.getElementById('rel-table');
+  const empty = document.getElementById('rel-empty');
+  tbody.innerHTML = '';
+  if(linhas.length === 0){
+    table.classList.add('app-hidden');
+    empty.classList.remove('app-hidden');
+  } else {
+    table.classList.remove('app-hidden');
+    empty.classList.add('app-hidden');
+    linhas.forEach(l => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHtml(l.produto)}</td>
+        <td>${formatDate(l.data)}</td>
+        <td>${escapeHtml(l.fornecedor)}</td>
+        <td>R$ ${formatMoney(l.valorGasto)}</td>
+        <td>${l.economia > 0 ? 'R$ ' + formatMoney(l.economia) : '—'}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+}
+document.getElementById('btn-logout-menu').addEventListener('click', () => signOut(auth));
+
+document.getElementById('btn-login').addEventListener('click', () => {
+  const email = document.getElementById('login-email').value.trim();
+  const senha = document.getElementById('login-senha').value;
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  if(!email || !senha){
+    errEl.textContent = 'Preencha e-mail e senha.';
+    return;
+  }
+  signInWithEmailAndPassword(auth, email, senha).catch((err) => {
+    errEl.textContent = 'E-mail ou senha incorretos.';
+  });
+});
+
+document.getElementById('login-senha').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') document.getElementById('btn-login').click();
+});
+
+document.getElementById('btn-logout').addEventListener('click', () => {
+  signOut(auth);
+});
+
+const STORAGE_KEY_LOCAL = 'cotacoes-board-v2';
+let cotacoes = [];
+let economiaExcel = 0;
+let metaPessoal = 0;
+let fornecedoresCadastrados = [];
+let draggedId = null;
+let editingId = null;
+let fornRows = [];
+let applyingRemote = false;
+
+function uid(p){ return (p||'c') + Date.now() + Math.floor(Math.random()*1000); }
+
+function setSyncStatus(status){
+  const dot = document.getElementById('sync-dot');
+  const notice = document.getElementById('storage-notice');
+  dot.className = 'sync-dot ' + status;
+  const label = status === 'online'
+    ? 'Sincronizado na nuvem — em tempo real com quem mais acessar este link'
+    : status === 'offline'
+      ? 'Sem conexão com a nuvem — salvando só neste navegador'
+      : 'Conectando à nuvem...';
+  notice.innerHTML = '';
+  notice.appendChild(dot);
+  notice.appendChild(document.createTextNode(label));
+}
+
+// Realtime listener: qualquer mudança no Firestore atualiza a tela na hora
+function startBoardListener(){
+  return onSnapshot(boardRef, (snap) => {
+    setSyncStatus('online');
+    if(snap.exists()){
+      const data = snap.data();
+      applyingRemote = true;
+      cotacoes = data.cotacoes || [];
+      economiaExcel = data.economiaExcel || 0;
+      metaPessoal = data.metaPessoal || 0;
+      fornecedoresCadastrados = data.fornecedoresCadastrados || [];
+      render();
+      applyingRemote = false;
+    } else {
+      // documento ainda não existe — cria vazio
+      cotacoes = [];
+      economiaExcel = 0;
+      metaPessoal = 0;
+      fornecedoresCadastrados = [];
+      render();
+    }
+  }, (err) => {
+    console.error('Erro de sincronização', err);
+    setSyncStatus('offline');
+    // fallback local
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY_LOCAL);
+      const parsed = raw ? JSON.parse(raw) : {};
+      cotacoes = Array.isArray(parsed) ? parsed : (parsed.cotacoes || []);
+      economiaExcel = (parsed && parsed.economiaExcel) || 0;
+      metaPessoal = (parsed && parsed.metaPessoal) || 0;
+      fornecedoresCadastrados = (parsed && parsed.fornecedoresCadastrados) || [];
+    }catch(e){ cotacoes = []; economiaExcel = 0; metaPessoal = 0; fornecedoresCadastrados = []; }
+    render();
+  });
+}
+
+async function saveData(){
+  if(applyingRemote) return;
+  try{
+    await setDoc(boardRef, { cotacoes, economiaExcel, metaPessoal, fornecedoresCadastrados });
+  }catch(e){
+    console.error('Erro ao salvar na nuvem, salvando localmente', e);
+    setSyncStatus('offline');
+    try{ localStorage.setItem(STORAGE_KEY_LOCAL, JSON.stringify({cotacoes, economiaExcel, metaPessoal, fornecedoresCadastrados})); }catch(err){}
+  }
+}
+
+function formatDate(d){
+  if(!d) return '';
+  const [y,m,day] = d.split('-');
+  return `${day}/${m}`;
+}
+
+function isLate(d){
+  if(!d) return false;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const target = new Date(d + 'T00:00:00');
+  return target < today;
+}
+
+function parsePrice(str){
+  if(!str) return null;
+  let s = String(str).replace(/[^\d,.-]/g, '');
+  if(s.indexOf(',') > -1 && s.indexOf('.') > -1){
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else if(s.indexOf(',') > -1){
+    s = s.replace(',', '.');
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+function formatMoney(n){
+  return n.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function escapeHtml(s){
+  if(!s) return '';
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+let mesesColapsados = new Set();
+try{ mesesColapsados = new Set(JSON.parse(localStorage.getItem('meses-colapsados') || '[]')); }catch(e){}
+
+function render(){
+  const statuses = ['enviada','analise','finalizacao','aprovada','perdida'];
+  statuses.forEach(s => {
+    const body = document.getElementById('body-' + s);
+    body.innerHTML = '';
+    const items = cotacoes.filter(c => c.status === s);
+    document.getElementById('count-' + s).textContent = items.length;
+    if(items.length === 0){
+      body.innerHTML = '<div class="empty-hint">Arraste cotações para cá</div>';
+      return;
+    }
+    if(s === 'aprovada'){
+      items.sort((a, b) => (b.dataAprovacaoISO || '').localeCompare(a.dataAprovacaoISO || ''));
+    }
+    let mesAtual = null;
+    items.forEach(c => {
+      if(s === 'aprovada'){
+        const chave = c.dataAprovacaoISO ? c.dataAprovacaoISO.slice(0,7) : 'sem-data';
+        if(chave !== mesAtual){
+          mesAtual = chave;
+          const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+          let rotulo = 'Sem data de aprovação';
+          let qtdMes = items.filter(x => (x.dataAprovacaoISO ? x.dataAprovacaoISO.slice(0,7) : 'sem-data') === chave).length;
+          if(chave !== 'sem-data'){
+            const [ano, mes] = chave.split('-');
+            rotulo = meses[parseInt(mes, 10) - 1] + ' de ' + ano;
+          }
+          const h = document.createElement('div');
+          const fechadoMes = mesesColapsados.has(chave);
+          h.className = 'mes-header' + (fechadoMes ? ' colapsado' : '');
+          h.innerHTML = `<span><span class="mes-seta">${fechadoMes ? '▶' : '▼'}</span> ${rotulo}</span><span class="mes-count">${qtdMes}</span>`;
+          h.addEventListener('click', () => {
+            if(mesesColapsados.has(chave)) mesesColapsados.delete(chave); else mesesColapsados.add(chave);
+            try{ localStorage.setItem('meses-colapsados', JSON.stringify([...mesesColapsados])); }catch(e){}
+            render();
+          });
+          body.appendChild(h);
+        }
+        if(mesesColapsados.has(chave)) return;
+      }
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.draggable = isAdmin;
+      card.dataset.id = c.id;
+
+      const fornecedores = c.fornecedores || [];
+      const precos = fornecedores.map(f => parsePrice(f.preco)).filter(v => v !== null);
+      const menorPreco = precos.length ? Math.min(...precos) : null;
+      const fechado = fechamentoCotacao(c).ativo;
+
+      let fornHtml = '';
+      fornecedores.forEach(f => {
+        const p = parsePrice(f.preco);
+        const isMenor = menorPreco !== null && p === menorPreco;
+        fornHtml += `<div class="forn-row ${f.fechado ? 'fechado' : ''} ${isMenor ? 'menor' : ''}">
+          <span class="forn-nome">${escapeHtml(f.nome)}${f.fechado ? '<span class="forn-tag">Fechado</span>' : ((f.produtos || []).filter(p => p.fechado).length ? `<span class="forn-tag">${(f.produtos || []).filter(p => p.fechado).length} fechado(s)</span>` : '')}</span>
+          <span class="forn-preco">${f.preco ? 'R$ ' + escapeHtml(f.preco) : '—'}</span>
+        </div>`;
+        if(f.condicoes){
+          fornHtml += `<div class="forn-cond">${escapeHtml(f.condicoes)}</div>`;
+        }
+      });
+
+      let savingHtml = '';
+      const economiaC = economiaCotacao(c);
+      if(economiaC > 0){
+        savingHtml = `<div class="saving-badge">Economia de R$ ${formatMoney(economiaC)}</div>`;
+      }
+
+      const late = c.status !== 'aprovada' && c.status !== 'perdida' && isLate(c.prazo);
+
+      card.innerHTML = `
+        <div class="actions">
+          <button class="print-btn" data-id="${c.id}" title="Imprimir / Salvar PDF">🖨️</button>
+          <button class="rfq-btn" data-id="${c.id}" title="Requisição de cotação para enviar aos fornecedores (sem preços)">📨</button>
+          ${fechado ? `<button class="pedido-btn" data-id="${c.id}" title="Gerar pedido de compra">🧾</button>` : ''}
+          ${fechado ? `<button class="estoque-btn" data-id="${c.id}" title="Lista de entregas para o estoque (sem preços)">📦</button>` : ''}
+          <button class="edit" data-id="${c.id}" title="Editar">✎</button>
+          <button class="del" data-id="${c.id}" title="Excluir">×</button>
+        </div>
+        <div class="produto">${escapeHtml(c.produto)}</div>
+        <div class="fornecedores">${fornHtml}</div>
+        ${savingHtml}
+        <div class="meta">
+          <span></span>
+          <span class="prazo ${late ? 'late' : ''}">${c.prazo ? (late ? 'Atrasado ' : '') + formatDate(c.prazo) : ''}</span>
+        </div>
+      `;
+      card.addEventListener('dragstart', () => {
+        draggedId = c.id;
+        card.classList.add('dragging');
+      });
+      card.addEventListener('dragend', () => {
+        card.classList.remove('dragging');
+      });
+      body.appendChild(card);
+    });
+  });
+
+  document.querySelectorAll('.del').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      cotacoes = cotacoes.filter(c => c.id !== id);
+      saveData();
+    });
+  });
+  document.querySelectorAll('.edit').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openModal(btn.dataset.id);
+    });
+  });
+  document.querySelectorAll('.print-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      imprimirCotacao(btn.dataset.id);
+    });
+  });
+  document.querySelectorAll('.pedido-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      gerarPedidoCompra(btn.dataset.id);
+    });
+  });
+
+  document.querySelectorAll('.rfq-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      gerarRequisicaoCotacao(btn.dataset.id);
+    });
+  });
+  document.querySelectorAll('.estoque-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      gerarListaEstoque(btn.dataset.id);
+    });
+  });
+
+  renderStats();
+  renderMeta();
+  atualizarDatalistFornecedores();
+  if(typeof renderRelatorio === 'function'){
+    try{ renderRelatorio(); }catch(e){}
+  }
+}
+
+function renderMeta(){
+  const totalGeral = getEconomiaPainel() + (economiaExcel || 0);
+  const pct = metaPessoal > 0 ? Math.min(100, (totalGeral / metaPessoal) * 100) : 0;
+  document.getElementById('meta-bar-fill').style.width = pct + '%';
+  document.getElementById('meta-pct').textContent = pct.toFixed(0) + '%';
+  const input = document.getElementById('input-meta-pessoal');
+  if(document.activeElement !== input){
+    input.value = formatMoney(metaPessoal || 0);
+  }
+}
+
+function getEconomiaPainel(){
+  let economiaPainel = 0;
+  cotacoes.forEach(c => { economiaPainel += economiaCotacao(c); });
+  return economiaPainel;
+}
+
+document.getElementById('input-meta-pessoal').addEventListener('change', (e) => {
+  const v = parsePrice(e.target.value);
+  metaPessoal = v !== null ? v : 0;
+  saveData();
+  renderMeta();
+});
+
+function renderStats(){
+  const statsEl = document.getElementById('stats');
+  const total = cotacoes.length;
+  const aprovadas = cotacoes.filter(c => c.status === 'aprovada').length;
+  const abertas = cotacoes.filter(c => c.status === 'enviada' || c.status === 'analise' || c.status === 'finalizacao').length;
+
+  const economiaPainel = getEconomiaPainel();
+  const totalGeral = economiaPainel + (economiaExcel || 0);
+
+  statsEl.innerHTML = `
+    <div class="stat"><div class="num">${total}</div><div class="lbl">Total</div></div>
+    <div class="stat"><div class="num">${abertas}</div><div class="lbl">Em aberto</div></div>
+    <div class="stat"><div class="num">${aprovadas}</div><div class="lbl">Aprovadas</div></div>
+    <div class="stat"><div class="num saving">R$ ${formatMoney(economiaPainel)}</div><div class="lbl">Economia deste painel</div></div>
+    <div class="stat excel-input">
+      <input type="text" id="input-economia-excel" value="${formatMoney(economiaExcel || 0)}">
+      <div class="lbl">Economia anterior (Excel)</div>
+    </div>
+    <div class="stat total-geral"><div class="num">R$ ${formatMoney(totalGeral)}</div><div class="lbl">Economia total geral</div></div>
+  `;
+
+  const input = document.getElementById('input-economia-excel');
+  input.addEventListener('change', () => {
+    const v = parsePrice(input.value);
+    economiaExcel = v !== null ? v : 0;
+    saveData();
+  });
+}
+
+document.querySelectorAll('.col').forEach(col => {
+  col.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    col.classList.add('drop-zone');
+  });
+  col.addEventListener('dragleave', () => {
+    col.classList.remove('drop-zone');
+  });
+  col.addEventListener('drop', (e) => {
+    e.preventDefault();
+    col.classList.remove('drop-zone');
+    if(!draggedId) return;
+    const status = col.dataset.status;
+    const c = cotacoes.find(x => x.id === draggedId);
+    if(c){
+      c.status = status;
+      if(status === 'aprovada' && !c.dataAprovacaoISO){
+        c.dataAprovacaoISO = new Date().toISOString().slice(0,10);
+      }
+      saveData();
+    }
+    draggedId = null;
+  });
+});
+
+// ---- Modal / form handling ----
+const overlay = document.getElementById('modal-overlay');
+const fornListEl = document.getElementById('forn-list');
+
+function produtoBruto(p){
+  const qtd = parseFloat((p.quantidade || '').toString().replace(',', '.')) || 0;
+  const vUnit = parsePrice(p.valorUnitario) || 0;
+  return qtd * vUnit;
+}
+
+function produtoDesconto(p){
+  const d = parsePrice(p.desconto);
+  return d !== null && d > 0 ? d : 0;
+}
+
+function produtoSubtotal(p){
+  return Math.max(0, produtoBruto(p) - produtoDesconto(p));
+}
+
+// Itens fechados da cotação: por produto (se algum estiver marcado) ou pelo fornecedor fechado
+function fechamentoCotacao(c){
+  const forns = c.fornecedores || [];
+  const temProdFechado = forns.some(f => (f.produtos || []).some(p => p.fechado));
+  let itens = [];
+  let valor = 0;
+  let ativo = false;
+  if(temProdFechado){
+    ativo = true;
+    forns.forEach(f => (f.produtos || []).forEach(p => { if(p.fechado) itens.push({forn: f, prod: p}); }));
+    valor = itens.reduce((sum, it) => sum + produtoSubtotal(it.prod), 0);
+  } else {
+    const f = forns.find(x => x.fechado);
+    if(f){
+      ativo = true;
+      itens = getProdutosForPrint(f).map(prod => ({forn: f, prod}));
+      const pf = parsePrice(f.preco);
+      valor = pf !== null ? pf : itens.reduce((sum, it) => sum + produtoSubtotal(it.prod), 0);
+    }
+  }
+  const desconto = itens.reduce((sum, it) => sum + produtoDesconto(it.prod), 0);
+  const nomes = [...new Set(itens.map(it => it.forn.nome))];
+  if(ativo && !nomes.length){ const f = forns.find(x => x.fechado); if(f) nomes.push(f.nome); }
+  return { ativo, itens, valor, desconto, nomes, porProduto: temProdFechado };
+}
+
+function economiaCotacao(c){
+  const fc = fechamentoCotacao(c);
+  if(!fc.ativo) return 0;
+  let e = fc.desconto;
+  const negP = c.precoNegociado ? parsePrice(c.precoNegociado) : null;
+  if(negP !== null && negP < fc.valor) e += (fc.valor - negP);
+  return e;
+}
+
+function recalcFornTotal(row){
+  const total = (row.produtos || []).reduce((sum, p) => sum + produtoSubtotal(p), 0);
+  row.preco = formatMoney(total);
+}
+
+function renderFornRows(){
+  fornListEl.innerHTML = '';
+  fornRows.forEach((row, idx) => {
+    if(!row.produtos || !row.produtos.length){
+      row.produtos = [{id: uid('p'), descricao:'', quantidade:'', valorUnitario:''}];
+    }
+    recalcFornTotal(row);
+
+    const div = document.createElement('div');
+    div.className = 'forn-edit-row';
+
+    let produtosHtml = '';
+    row.produtos.forEach((p) => {
+      const sub = produtoSubtotal(p);
+      produtosHtml += `
+        <div class="produto-row">
+          <input type="text" placeholder="Descrição do produto" class="produto-desc-input" value="${escapeHtml(p.descricao || '')}">
+          <div class="produto-grid">
+            <input type="text" placeholder="Qtd" class="produto-qtd-input" value="${escapeHtml(p.quantidade || '')}">
+            <input type="text" placeholder="Valor unitário R$" class="produto-vunit-input" value="${escapeHtml(p.valorUnitario || '')}">
+            <div class="produto-subtotal">R$ ${formatMoney(sub)}</div>
+            <button type="button" class="remove-produto" title="Remover produto">×</button>
+          </div>
+          <div class="produto-extra">
+            <input type="text" placeholder="Desconto R$ (opcional)" class="produto-desc-valor-input" value="${escapeHtml(p.desconto || '')}">
+            <label class="fechado-toggle">
+              <input type="checkbox" class="produto-fechado-input" ${p.fechado ? 'checked' : ''}>
+              Produto fechado
+            </label>
+          </div>
+        </div>
+      `;
+    });
+
+    div.innerHTML = `
+      <input type="text" placeholder="Fornecedor" class="forn-nome-input" list="lista-fornecedores-cadastrados" value="${escapeHtml(row.nome)}" style="margin-bottom:8px;">
+      <div class="produtos-list">${produtosHtml}</div>
+      <button type="button" class="btn-add-produto">+ Adicionar produto</button>
+      ${idx === 0 ? '<button type="button" class="btn-copy-produtos">⧉ Copiar lista para os demais fornecedores</button>' : ''}
+      <div class="forn-total-row"><span>Total do fornecedor</span><span>R$ ${row.preco}</span></div>
+      <textarea placeholder="Condições (prazo de pagamento, entrega, etc.)" class="forn-cond-input">${escapeHtml(row.condicoes)}</textarea>
+      <div class="row-bottom">
+        <label class="fechado-toggle">
+          <input type="checkbox" class="forn-fechado-input" ${row.fechado ? 'checked' : ''}>
+          Fornecedor fechado
+        </label>
+        <button type="button" class="remove-forn" data-idx="${idx}">Remover fornecedor</button>
+      </div>
+    `;
+
+    div.querySelector('.forn-nome-input').addEventListener('input', (e) => row.nome = e.target.value);
+
+    const atualizarTotais = (pIdx) => {
+      recalcFornTotal(row);
+      const prodRow = div.querySelectorAll('.produto-row')[pIdx];
+      prodRow.querySelector('.produto-subtotal').textContent = 'R$ ' + formatMoney(produtoSubtotal(row.produtos[pIdx]));
+      div.querySelector('.forn-total-row span:last-child').textContent = 'R$ ' + row.preco;
+    };
+
+    div.querySelectorAll('.produto-desc-input').forEach((inp, pIdx) => {
+      inp.addEventListener('input', (e) => { row.produtos[pIdx].descricao = e.target.value; });
+    });
+    div.querySelectorAll('.produto-qtd-input').forEach((inp, pIdx) => {
+      inp.addEventListener('input', (e) => {
+        row.produtos[pIdx].quantidade = e.target.value;
+        atualizarTotais(pIdx);
+      });
+    });
+    div.querySelectorAll('.produto-vunit-input').forEach((inp, pIdx) => {
+      inp.addEventListener('input', (e) => {
+        row.produtos[pIdx].valorUnitario = e.target.value;
+        atualizarTotais(pIdx);
+      });
+    });
+    div.querySelectorAll('.produto-desc-valor-input').forEach((inp, pIdx) => {
+      inp.addEventListener('input', (e) => {
+        row.produtos[pIdx].desconto = e.target.value;
+        atualizarTotais(pIdx);
+      });
+    });
+    div.querySelectorAll('.produto-fechado-input').forEach((chk, pIdx) => {
+      chk.addEventListener('change', (e) => {
+        const alvo = row.produtos[pIdx];
+        alvo.fechado = e.target.checked;
+        const nomeP = (alvo.descricao || '').trim().toLowerCase();
+        if(e.target.checked && nomeP){
+          fornRows.forEach(r => (r.produtos || []).forEach(q => {
+            if(q !== alvo && (q.descricao || '').trim().toLowerCase() === nomeP) q.fechado = false;
+          }));
+        }
+        renderFornRows();
+      });
+    });
+    div.querySelectorAll('.remove-produto').forEach((btn, pIdx) => {
+      btn.addEventListener('click', () => {
+        if(row.produtos.length > 1){
+          row.produtos.splice(pIdx, 1);
+        } else {
+          row.produtos[0] = {id: uid('p'), descricao:'', quantidade:'', valorUnitario:''};
+        }
+        renderFornRows();
+      });
+    });
+    div.querySelector('.btn-add-produto').addEventListener('click', () => {
+      row.produtos.push({id: uid('p'), descricao:'', quantidade:'', valorUnitario:''});
+      renderFornRows();
+    });
+
+    const btnCopy = div.querySelector('.btn-copy-produtos');
+    if(btnCopy){
+      btnCopy.addEventListener('click', () => {
+        const base = row.produtos.filter(p => (p.descricao || '').trim() || (p.quantidade || '').toString().trim());
+        if(!base.length){ alert('Preencha ao menos um produto neste fornecedor antes de copiar.'); return; }
+        const outros = fornRows.filter((r, i) => i !== 0);
+        if(!outros.length){ alert('Adicione os outros fornecedores primeiro (botão "+ Adicionar fornecedor").'); return; }
+        const temDados = outros.some(r => (r.produtos || []).some(p => (p.descricao || '').trim() || (p.quantidade || '').toString().trim() || (p.valorUnitario || '').toString().trim()));
+        if(temDados && !confirm('Os outros fornecedores já têm produtos preenchidos. Substituir pela lista do primeiro fornecedor? (os valores unitários deles serão apagados)')) return;
+        outros.forEach(r => {
+          r.produtos = base.map(p => ({id: uid('p'), descricao: p.descricao || '', quantidade: p.quantidade || '', valorUnitario: ''}));
+        });
+        renderFornRows();
+      });
+    }
+
+    div.querySelector('.forn-cond-input').addEventListener('input', (e) => row.condicoes = e.target.value);
+    div.querySelector('.forn-fechado-input').addEventListener('change', (e) => {
+      fornRows.forEach(r => r.fechado = false);
+      row.fechado = e.target.checked;
+      renderFornRows();
+    });
+    div.querySelector('.remove-forn').addEventListener('click', () => {
+      fornRows.splice(idx, 1);
+      renderFornRows();
+    });
+
+    fornListEl.appendChild(div);
+  });
+}
+
+function getProdutosForPrint(f){
+  if(f.produtos && f.produtos.length) return f.produtos;
+  if((f.quantidade && f.quantidade.toString().trim() !== '') || (f.valorUnitario && f.valorUnitario.toString().trim() !== '')){
+    return [{descricao:'', quantidade: f.quantidade || '', valorUnitario: f.valorUnitario || ''}];
+  }
+  if(f.preco && f.preco.toString().trim() !== ''){
+    return [{descricao:'', quantidade:'1', valorUnitario: f.preco}];
+  }
+  return [];
+}
+
+function imprimirCotacao(id){
+  const c = cotacoes.find(x => x.id === id);
+  if(!c) return;
+
+  const statusLabel = {
+    enviada: 'Enviada', analise: 'Em análise', finalizacao: 'Finalização',
+    aprovada: 'Aprovada', perdida: 'Perdida / Recusada'
+  }[c.status] || c.status;
+
+  const fornecedores = c.fornecedores || [];
+  const norm = (t) => (t || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
+
+  // Agrupa por produto: cada produto traz a oferta de cada fornecedor
+  const grupos = [];
+  const mapa = {};
+  fornecedores.forEach(f => {
+    getProdutosForPrint(f).forEach(prod => {
+      const nome = (prod.descricao || '').trim() || c.produto;
+      const chave = norm(nome);
+      if(!mapa[chave]){
+        mapa[chave] = { nome, ofertas: [] };
+        grupos.push(mapa[chave]);
+      }
+      const qtd = parseFloat((prod.quantidade || '').toString().replace(',', '.')) || 0;
+      const vUnit = parsePrice(prod.valorUnitario);
+      const cotou = (prod.valorUnitario || '').toString().trim() !== '' && vUnit !== null;
+      const desc = produtoDesconto(prod);
+      const sub = produtoSubtotal(prod);
+      mapa[chave].ofertas.push({
+        forn: f, quantidade: prod.quantidade || '', valorUnitario: prod.valorUnitario || '',
+        desconto: desc, fechado: !!prod.fechado,
+        subtotal: sub, unit: cotou ? (qtd > 0 ? sub / qtd : vUnit) : null
+      });
+    });
+  });
+
+  let blocosHtml = '';
+  grupos.forEach((g, gi) => {
+    const unitarios = g.ofertas.filter(o => o.unit !== null).map(o => o.unit);
+    const menorUnit = unitarios.length > 1 ? Math.min(...unitarios) : (unitarios.length === 1 ? unitarios[0] : null);
+    const temDesc = g.ofertas.some(o => o.desconto > 0);
+    const linhas = g.ofertas.map(o => {
+      const isMenor = menorUnit !== null && o.unit === menorUnit && g.ofertas.length > 1;
+      return `<tr class="${isMenor ? 'print-menor-preco' : ''}">
+        <td>${escapeHtml(o.forn.nome)}${(o.fechado || o.forn.fechado) ? ' <span class="print-fechado">(Fechado)</span>' : ''}</td>
+        <td>${escapeHtml(o.quantidade || '—')}</td>
+        <td>${o.valorUnitario ? 'R$ ' + escapeHtml(o.valorUnitario) : '—'}${isMenor ? ' <span class="print-menor-tag">MENOR PREÇO</span>' : ''}</td>
+        ${temDesc ? `<td>${o.desconto > 0 ? '- R$ ' + formatMoney(o.desconto) : '—'}</td>` : ''}
+        <td>${o.unit !== null ? 'R$ ' + formatMoney(o.subtotal) : '—'}</td>
+      </tr>`;
+    }).join('');
+    blocosHtml += `
+      <div class="print-page">
+        ${gi > 0 ? `<div class="print-page-head">Cotação — ${escapeHtml(c.produto)}</div>` : ''}
+        <h3 class="print-produto-titulo">Produto ${gi + 1} de ${grupos.length}: ${escapeHtml(g.nome)}</h3>
+        <table>
+          <thead><tr><th>Fornecedor</th><th>Qtd</th><th>Valor unitário</th>${temDesc ? '<th>Desconto</th>' : ''}<th>Valor total</th></tr></thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      </div>`;
+  });
+
+  // Resumo geral por fornecedor
+  const precos = fornecedores.map(f => parsePrice(f.preco)).filter(v => v !== null);
+  const menorTotal = precos.length > 1 ? Math.min(...precos) : null;
+  const resumoLinhas = fornecedores.map(f => {
+    const isMenor = menorTotal !== null && parsePrice(f.preco) === menorTotal;
+    return `<tr class="${isMenor ? 'print-menor-preco' : ''}">
+      <td>${escapeHtml(f.nome)}${f.fechado ? ' <span class="print-fechado">(Fechado)</span>' : ''}</td>
+      <td>${f.preco ? 'R$ ' + escapeHtml(f.preco) : '—'}${isMenor ? ' <span class="print-menor-tag">MENOR TOTAL</span>' : ''}</td>
+      <td>${escapeHtml(f.condicoes || '—')}</td>
+    </tr>`;
+  }).join('');
+
+  const hoje = new Date().toLocaleDateString('pt-BR');
+
+  document.getElementById('print-area').innerHTML = `
+    <h1>Cotação — ${escapeHtml(c.produto)}</h1>
+    <div class="print-sub">Status: ${statusLabel} · Prazo de resposta: ${c.prazo ? formatDate(c.prazo) : '—'} · Emitido em ${hoje}</div>
+    ${blocosHtml || '<p>Nenhum produto informado</p>'}
+    <div class="print-page print-page-last">
+      <div class="print-page-head">Cotação — ${escapeHtml(c.produto)}</div>
+      <h3 class="print-produto-titulo">Resumo por fornecedor</h3>
+      <table>
+        <thead><tr><th>Fornecedor</th><th>Total geral</th><th>Condições</th></tr></thead>
+        <tbody>${resumoLinhas || '<tr><td colspan="3">Nenhum fornecedor cadastrado</td></tr>'}</tbody>
+      </table>
+      <div class="print-signature">
+        <div>Assinatura do solicitante</div>
+        <div>Comprador responsável</div>
+        <div>Liberado por</div>
+      </div>
+      <div class="print-date">Data: ____ / ____ / ______</div>
+      <div class="print-footer">Documento gerado pelo Painel de Cotações.</div>
+    </div>
+  `;
+
+  window.print();
+}
+
+function gerarRequisicaoCotacao(id){
+  const c = cotacoes.find(x => x.id === id);
+  if(!c) return;
+  const fornecedores = c.fornecedores || [];
+
+  // Lista total de produtos (união entre todos os fornecedores), sem preços
+  const lista = [];
+  const mapa = {};
+  fornecedores.forEach(f => getProdutosForPrint(f).forEach(prod => {
+    const nome = (prod.descricao || '').trim() || c.produto;
+    const chave = nome.toLowerCase().replace(/\s+/g, ' ');
+    if(!mapa[chave]){ mapa[chave] = { nome, quantidade: '' }; lista.push(mapa[chave]); }
+    if(!mapa[chave].quantidade && (prod.quantidade || '').toString().trim()) mapa[chave].quantidade = prod.quantidade;
+  }));
+  if(!lista.length) lista.push({ nome: c.produto, quantidade: '' });
+
+  const destinatarios = fornecedores.length ? fornecedores.map(f => f.nome) : [''];
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const numero = 'RC-' + c.id.replace(/[^0-9]/g, '').slice(-8);
+
+  const linhas = lista.map((it, i) => `<tr>
+    <td style="width:30px;">${i + 1}</td>
+    <td>${escapeHtml(it.nome)}</td>
+    <td style="width:70px;">${escapeHtml(it.quantidade || '')}</td>
+    <td style="width:110px;"></td>
+    <td style="width:110px;"></td>
+  </tr>`).join('');
+
+  document.getElementById('print-area').innerHTML = destinatarios.map((nome, i) => `
+    <div class="print-page ${i === destinatarios.length - 1 ? 'print-page-last' : ''}">
+      <h1>Solicitação de Cotação — ${numero}</h1>
+      <div class="print-sub">Emitida em ${hoje}${c.prazo ? ' · Responder até ' + formatDate(c.prazo) : ''}</div>
+      <div class="print-sub" style="font-size:14px; color:#111; margin-bottom:6px;"><strong>Fornecedor:</strong> ${nome ? escapeHtml(nome) : '______________________________'}</div>
+      <div class="print-sub" style="margin-bottom:6px;">Solicitamos cotação dos itens abaixo. Por favor preencha os valores unitários e totais e as condições comerciais.</div>
+      <table>
+        <thead><tr><th>#</th><th>Produto</th><th>Qtd</th><th>Valor unitário (R$)</th><th>Valor total (R$)</th></tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+      <div class="print-sub" style="margin-top:20px; line-height:2.2; color:#111;">
+        Prazo de entrega: ____________________________________________<br>
+        Condições de pagamento: ______________________________________<br>
+        Frete: ______________________ &nbsp; Validade da proposta: ______________<br>
+        Observações: ________________________________________________
+      </div>
+      <div class="print-signature">
+        <div>Comprador responsável</div>
+        <div>Assinatura / carimbo do fornecedor</div>
+      </div>
+      <div class="print-date">Data: ____ / ____ / ______</div>
+      <div class="print-footer">Documento gerado pelo Painel de Cotações.</div>
+    </div>`).join('');
+  window.print();
+}
+
+function gerarListaEstoque(id){
+  const c = cotacoes.find(x => x.id === id);
+  if(!c) return;
+  const fc = fechamentoCotacao(c);
+  if(!fc.ativo || !fc.itens.length){
+    alert('Marque um fornecedor ou produtos como "Fechado" nessa cotação antes de gerar a lista para o estoque.');
+    return;
+  }
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const itens = fc.itens.slice().sort((a, b) => a.forn.nome.localeCompare(b.forn.nome));
+  const linhas = itens.map(it => `<tr>
+    <td>${escapeHtml(it.prod.descricao || c.produto)}</td>
+    <td>${escapeHtml(it.prod.quantidade || '—')}</td>
+    <td>${escapeHtml(it.forn.nome)}</td>
+    <td style="width:70px; text-align:center;">☐</td>
+  </tr>`).join('');
+
+  document.getElementById('print-area').innerHTML = `
+    <h1>Entregas previstas — ${escapeHtml(c.produto)}</h1>
+    <div class="print-sub">Lista para o estoque · Emitido em ${hoje}</div>
+    <table>
+      <thead><tr><th>Produto</th><th>Quantidade</th><th>Fornecedor</th><th>Recebido</th></tr></thead>
+      <tbody>${linhas}</tbody>
+    </table>
+    <div class="print-date" style="margin-top:30px;">Recebido por: ______________________ &nbsp;&nbsp; Data: ____ / ____ / ______</div>
+    <div class="print-footer">Documento gerado pelo Painel de Cotações.</div>
+  `;
+  window.print();
+}
+
+function gerarPedidoCompra(id){
+  const c = cotacoes.find(x => x.id === id);
+  if(!c) return;
+  const fc = fechamentoCotacao(c);
+  if(!fc.ativo){
+    alert('Marque um fornecedor ou produtos como "Fechado" nessa cotação antes de gerar o pedido de compra.');
+    return;
+  }
+
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const baseNumero = 'PC-' + c.id.replace(/[^0-9]/g, '').slice(-8);
+  const nomes = fc.nomes.length ? fc.nomes : [...new Set(fc.itens.map(it => it.forn.nome))];
+
+  const paginas = nomes.map((nome, i) => {
+    const itens = fc.itens.filter(it => it.forn.nome === nome);
+    const forn = (c.fornecedores || []).find(x => x.nome === nome) || (itens[0] && itens[0].forn) || {};
+    const temDesc = itens.some(it => produtoDesconto(it.prod) > 0);
+    let total = 0;
+    const linhas = itens.map(it => {
+      const prod = it.prod;
+      const desc = produtoDesconto(prod);
+      const sub = produtoSubtotal(prod);
+      total += sub;
+      return `<tr>
+        <td>${escapeHtml(prod.descricao || c.produto)}</td>
+        <td>${escapeHtml(prod.quantidade || '—')}</td>
+        <td>${prod.valorUnitario ? 'R$ ' + escapeHtml(prod.valorUnitario) : '—'}</td>
+        ${temDesc ? `<td>${desc > 0 ? '- R$ ' + formatMoney(desc) : '—'}</td>` : ''}
+        <td>R$ ${formatMoney(sub)}</td>
+      </tr>`;
+    }).join('');
+    // fornecedor fechado inteiro (formato antigo): usa o total salvo
+    if(!fc.porProduto){
+      const pf = parsePrice(forn.preco);
+      if(pf !== null) total = pf;
+    }
+    const numero = nomes.length > 1 ? baseNumero + '-' + (i + 1) : baseNumero;
+    const ultima = i === nomes.length - 1;
+    return `
+      <div class="print-page ${ultima ? 'print-page-last' : ''}">
+        <h1>Pedido de Compra — ${numero}</h1>
+        <div class="print-sub">Emitido em ${hoje} · Cotação: ${escapeHtml(c.produto)}</div>
+        <div class="print-sub" style="margin-bottom:6px; font-size:14px; color:#111;"><strong>Fornecedor:</strong> ${escapeHtml(nome)}</div>
+        <table>
+          <thead>
+            <tr><th>Produto</th><th>Qtd</th><th>Valor unitário</th>${temDesc ? '<th>Desconto</th>' : ''}<th>Valor total</th></tr>
+          </thead>
+          <tbody>${linhas || '<tr><td colspan="5">Nenhum produto informado</td></tr>'}</tbody>
+        </table>
+        <div class="print-forn-total" style="text-align:right; margin-top:6px;">Total do pedido: R$ ${formatMoney(total)}</div>
+        <div class="print-sub" style="margin-top:16px;"><strong>Condições:</strong> ${escapeHtml(forn.condicoes || 'Não informadas')}</div>
+        <div class="print-signature">
+          <div>Assinatura do solicitante</div>
+          <div>Comprador responsável</div>
+          <div>Liberado por</div>
+        </div>
+        <div class="print-date">Data: ____ / ____ / ______</div>
+        <div class="print-footer">Documento gerado pelo Painel de Cotações.</div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('print-area').innerHTML = paginas;
+  window.print();
+}
+
+document.getElementById('btn-add-forn').addEventListener('click', () => {
+  fornRows.push({nome:'', preco:'', condicoes:'', fechado:false, produtos:[{id: uid('p'), descricao:'', quantidade:'', valorUnitario:''}]});
+  renderFornRows();
+});
+
+function openModal(id){
+  editingId = id || null;
+  const c = id ? cotacoes.find(x => x.id === id) : null;
+  document.getElementById('modal-title').textContent = c ? 'Editar cotação' : 'Nova cotação';
+  document.getElementById('f-produto').value = c ? c.produto : '';
+  document.getElementById('f-prazo').value = c ? (c.prazo || '') : '';
+  document.getElementById('f-preco-negociado').value = c ? (c.precoNegociado || '') : '';
+  document.getElementById('f-data-aprovacao').value = c ? (c.dataAprovacaoISO || '') : '';
+  fornRows = c && c.fornecedores && c.fornecedores.length
+    ? c.fornecedores.map(f => {
+        const row = {...f};
+        if(!row.produtos || !row.produtos.length){
+          if((row.quantidade && row.quantidade.toString().trim() !== '') || (row.valorUnitario && row.valorUnitario.toString().trim() !== '')){
+            row.produtos = [{id: uid('p'), descricao:'', quantidade: row.quantidade || '', valorUnitario: row.valorUnitario || ''}];
+          } else if(row.preco && row.preco.toString().trim() !== ''){
+            row.produtos = [{id: uid('p'), descricao:'', quantidade:'1', valorUnitario: row.preco}];
+          } else {
+            row.produtos = [{id: uid('p'), descricao:'', quantidade:'', valorUnitario:''}];
+          }
+        }
+        return row;
+      })
+    : [{nome:'', preco:'', condicoes:'', fechado:false, produtos:[{id: uid('p'), descricao:'', quantidade:'', valorUnitario:''}]}];
+  renderFornRows();
+  overlay.classList.add('open');
+}
+
+document.getElementById('btn-new').addEventListener('click', () => openModal(null));
+document.getElementById('btn-cancel').addEventListener('click', () => {
+  overlay.classList.remove('open');
+});
+overlay.addEventListener('click', (e) => {
+  if(e.target === overlay) overlay.classList.remove('open');
+});
+
+document.getElementById('btn-save').addEventListener('click', () => {
+  const produto = document.getElementById('f-produto').value.trim();
+  if(!produto){
+    document.getElementById('f-produto').focus();
+    return;
+  }
+  const fornecedores = fornRows
+    .filter(f => f.nome && f.nome.trim())
+    .map(f => {
+      const produtos = (f.produtos || [])
+        .filter(p => (p.descricao && p.descricao.trim()) || (p.quantidade && p.quantidade.toString().trim()) || (p.valorUnitario && p.valorUnitario.toString().trim()) || (p.desconto && p.desconto.toString().trim()))
+        .map(p => ({
+          id: p.id || uid('p'),
+          descricao: (p.descricao || '').trim(),
+          quantidade: (p.quantidade || '').toString().trim(),
+          valorUnitario: (p.valorUnitario || '').toString().trim(),
+          desconto: (p.desconto || '').toString().trim(),
+          fechado: !!p.fechado
+        }));
+      const totalCalculado = produtos.reduce((sum, p) => sum + produtoSubtotal(p), 0);
+      return {
+        id: f.id || uid('f'),
+        nome: f.nome.trim(),
+        produtos,
+        preco: produtos.length ? formatMoney(totalCalculado) : (f.preco || '').toString().trim(),
+        condicoes: (f.condicoes || '').trim(),
+        fechado: !!f.fechado
+      };
+    });
+
+  fornecedores.forEach(f => registrarFornecedorSeNovo(f.nome, isAdmin));
+
+  const prazo = document.getElementById('f-prazo').value;
+  const precoNegociado = document.getElementById('f-preco-negociado').value.trim();
+  const dataAprovacaoISO = document.getElementById('f-data-aprovacao').value;
+
+  if(editingId){
+    const c = cotacoes.find(x => x.id === editingId);
+    c.produto = produto;
+    c.prazo = prazo;
+    c.fornecedores = fornecedores;
+    c.precoNegociado = precoNegociado;
+    c.dataAprovacaoISO = dataAprovacaoISO;
+  } else {
+    cotacoes.push({
+      id: uid(),
+      produto,
+      prazo,
+      fornecedores,
+      precoNegociado,
+      dataAprovacaoISO,
+      status: 'enviada'
+    });
+  }
+  saveData();
+  overlay.classList.remove('open');
+});
+
+document.getElementById('btn-export').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify({cotacoes, economiaExcel, metaPessoal}, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'cotacoes-backup.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+document.getElementById('btn-import').addEventListener('click', () => {
+  document.getElementById('input-import').click();
+});
+document.getElementById('input-import').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try{
+      const imported = JSON.parse(ev.target.result);
+      if(Array.isArray(imported)){
+        cotacoes = imported;
+      } else if(imported && Array.isArray(imported.cotacoes)){
+        cotacoes = imported.cotacoes;
+        economiaExcel = imported.economiaExcel || 0;
+        metaPessoal = imported.metaPessoal || 0;
+      } else {
+        throw new Error('formato inválido');
+      }
+      saveData();
+      render();
+      alert('Dados importados com sucesso!');
+    }catch(err){
+      alert('Não consegui ler esse arquivo. Confirme que é um backup exportado daqui mesmo.');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// =====================================================================
+// MÓDULO REQUISIÇÕES
+// =====================================================================
+const RQ_STATUS = [
+  ['nova','Nova'], ['recebida','Recebida'], ['cotacao','Em cotação'],
+  ['autorizada','Compra autorizada'], ['comprada','Comprada / concluída'], ['recusada','Recusada']
+];
+const RQ_PRIO = { urgente: '🔴 Urgente', normal: '🟠 Normal', cotar: '🟢 Pode aguardar cotação' };
+let requisicoes = [];
+let unsubscribeReq = null;
+let rqEditingId = null;
+let rqDraft = [];
+let rqSelectedId = null;
+const rq$ = id => document.getElementById(id);
+
+function rqStatusLabel(st){ const f = RQ_STATUS.find(x => x[0] === st); return f ? f[1] : st; }
+function rqFmt(iso){ if(!iso) return '—'; const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleDateString('pt-BR'); }
+function rqFmtDia(v){ if(!v) return '—'; const d = new Date(v + 'T00:00:00'); return isNaN(d) ? '—' : d.toLocaleDateString('pt-BR'); }
+function rqSafeUrl(raw){
+  const v = (raw || '').trim();
+  if(!v) return '';
+  try{ const u = new URL(/^https?:\/\//i.test(v) ? v : 'https://' + v); return /^https?:$/i.test(u.protocol) ? u.href : ''; }catch(e){ return ''; }
+}
+
+function startRequisicoesListener(){
+  if(unsubscribeReq || !currentUser) return;
+  const q = isRequisitante ? query(reqRef, where('createdBy', '==', currentUser.uid)) : query(reqRef);
+  rq$('rq-sync').textContent = 'Conectando...';
+  unsubscribeReq = onSnapshot(q, (snap) => {
+    requisicoes = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''));
+    rq$('rq-sync').innerHTML = '<span class="sync-dot online"></span>Sincronizado em tempo real';
+    renderRequisicoes();
+  }, (err) => {
+    console.error(err);
+    rq$('rq-sync').innerHTML = '<span class="sync-dot offline"></span>Sem acesso às requisições — verifique as regras do Firebase';
+  });
+}
+function stopRequisicoesListener(){
+  if(unsubscribeReq){ unsubscribeReq(); unsubscribeReq = null; }
+  requisicoes = [];
+}
+
+function rqFiltradas(){
+  const q = rq$('rq-search').value.toLowerCase().trim();
+  const p = rq$('rq-filter-prio').value;
+  return requisicoes.filter(r => {
+    if(p && r.prioridade !== p) return false;
+    if(!q) return true;
+    const blob = ((r.equipamento || '') + ' ' + (r.solicitanteNome || '') + ' ' + (r.itens || []).map(i => (i.produto || '') + ' ' + (i.referencia || '')).join(' ')).toLowerCase();
+    return blob.includes(q);
+  });
+}
+
+function renderRequisicoes(){
+  const data = rqFiltradas();
+  rq$('rq-board').innerHTML = RQ_STATUS.map(([st, label]) => {
+    const arr = data.filter(r => (r.status || 'nova') === st);
+    const cards = arr.map(r => {
+      const imgs = (r.itens || []).flatMap(i => i.photos || []).slice(0, 4);
+      const txt = (r.itens || []).map(i => `${escapeHtml(i.produto)} (${escapeHtml(i.quantidade)} ${escapeHtml(i.unidade || 'un')})`).join(' • ');
+      return `<div class="card rq-card" data-id="${escapeHtml(r.id)}">
+        <span class="rq-tag ${escapeHtml(r.prioridade || 'normal')}">${escapeHtml(RQ_PRIO[r.prioridade] || RQ_PRIO.normal)}</span>
+        <div class="produto">${txt || 'Requisição sem item'}</div>
+        <div class="rq-meta">
+          <div><strong>Equipamento:</strong> ${escapeHtml(r.equipamento || 'Não informado')}</div>
+          <div><strong>Solicitante:</strong> ${escapeHtml(r.solicitanteNome || '—')}</div>
+          <div><strong>Necessário até:</strong> ${rqFmtDia(r.dataNecessaria)}</div>
+        </div>
+        ${imgs.length ? `<div class="rq-thumbs">${imgs.map(u => `<img src="${escapeHtml(u)}" alt="Foto">`).join('')}</div>` : ''}
+      </div>`;
+    }).join('');
+    return `<div class="col"><div class="col-head"><span class="name">${label}</span><span class="count">${arr.length}</span></div>
+      <div class="col-body">${cards || '<div class="empty-hint">Nenhuma requisição</div>'}</div></div>`;
+  }).join('');
+  document.querySelectorAll('.rq-card').forEach(c => c.addEventListener('click', () => rqAbrirDetalhe(c.dataset.id)));
+}
+
+// ---------- formulário ----------
+function rqNovoItem(it){ return Object.assign({ produto:'', quantidade:'', unidade:'un', referencia:'', links:[], photos:[], files:[] }, it || {}); }
+
+function rqRenderItens(){
+  const box = rq$('rq-items');
+  box.innerHTML = '';
+  rqDraft.forEach((it, idx) => {
+    const div = document.createElement('div');
+    div.className = 'rq-item';
+    div.innerHTML = `
+      <div class="rq-item-head"><strong>Item ${idx + 1}</strong>
+        <span><button type="button" class="rq-mini add-link">+ Link</button>
+        <button type="button" class="rq-mini danger rm-item">Remover item</button></span></div>
+      <div class="rq-row3">
+        <input type="text" class="it-prod" placeholder="Produto / peça / serviço" value="${escapeHtml(it.produto)}">
+        <input type="number" class="it-qtd" min="0" step="any" placeholder="Qtd" value="${escapeHtml(it.quantidade)}">
+        <input type="text" class="it-un" placeholder="Un" value="${escapeHtml(it.unidade)}">
+      </div>
+      <input type="text" class="it-ref" placeholder="Código / referência / marca (opcional)" value="${escapeHtml(it.referencia)}">
+      <div class="it-links"></div>
+      <div class="rq-photos"></div>
+      <input type="file" class="it-files" accept="image/*" multiple>
+      <div class="saving-hint it-file-state" style="color:var(--muted);">${it.files.length ? it.files.length + ' foto(s) para enviar.' : 'Anexe fotos da peça/equipamento (reduzidas automaticamente).'}</div>`;
+    div.querySelector('.it-prod').addEventListener('input', e => it.produto = e.target.value);
+    div.querySelector('.it-qtd').addEventListener('input', e => it.quantidade = e.target.value);
+    div.querySelector('.it-un').addEventListener('input', e => it.unidade = e.target.value);
+    div.querySelector('.it-ref').addEventListener('input', e => it.referencia = e.target.value);
+    div.querySelector('.rm-item').addEventListener('click', () => { rqDraft.splice(idx, 1); if(!rqDraft.length) rqDraft.push(rqNovoItem()); rqRenderItens(); });
+    div.querySelector('.add-link').addEventListener('click', () => { it.links.push(''); rqRenderItens(); });
+    const linksBox = div.querySelector('.it-links');
+    it.links.forEach((u, li) => {
+      const row = document.createElement('div');
+      row.className = 'rq-linkrow';
+      row.innerHTML = `<input type="url" placeholder="https://..." value="${escapeHtml(u)}"><button type="button" class="rq-mini danger">×</button>`;
+      row.querySelector('input').addEventListener('input', e => it.links[li] = e.target.value);
+      row.querySelector('button').addEventListener('click', () => { it.links.splice(li, 1); rqRenderItens(); });
+      linksBox.appendChild(row);
+    });
+    const photosBox = div.querySelector('.rq-photos');
+    it.photos.forEach((u, pi) => {
+      const w = document.createElement('div');
+      w.className = 'rq-photo';
+      w.innerHTML = `<a href="${escapeHtml(u)}" target="_blank" rel="noopener"><img src="${escapeHtml(u)}" alt="Foto"></a><button type="button">×</button>`;
+      w.querySelector('button').addEventListener('click', () => { it.photos.splice(pi, 1); rqRenderItens(); });
+      photosBox.appendChild(w);
+    });
+    div.querySelector('.it-files').addEventListener('change', e => {
+      it.files = [...e.target.files];
+      div.querySelector('.it-file-state').textContent = it.files.length ? it.files.length + ' foto(s) para enviar.' : 'Anexe fotos da peça/equipamento (reduzidas automaticamente).';
+    });
+    box.appendChild(div);
+  });
+}
+
+function rqAbrirForm(r){
+  rqEditingId = r ? r.id : null;
+  rq$('rq-form-title').textContent = r ? 'Editar requisição' : 'Nova requisição';
+  rq$('rq-f-solicitante').value = r ? (r.solicitanteNome || '') : ((currentUser && currentUser.email) || '');
+  rq$('rq-f-equipamento').value = r ? (r.equipamento || '') : '';
+  rq$('rq-f-prio').value = r ? (r.prioridade || 'normal') : 'normal';
+  rq$('rq-f-data').value = r ? (r.dataNecessaria || '') : '';
+  rq$('rq-f-obs').value = r ? (r.observacao || '') : '';
+  rq$('rq-form-state').textContent = '';
+  rqDraft = (r && r.itens && r.itens.length) ? r.itens.map(i => rqNovoItem({ ...i, links: [...(i.links || [])], photos: [...(i.photos || [])], files: [] })) : [rqNovoItem()];
+  rqRenderItens();
+  rq$('rq-form-overlay').classList.add('open');
+}
+
+async function rqComprimir(file, max, qual){
+  if(!file.type.startsWith('image/')) return file;
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  try{
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+    const scale = Math.min(1, max / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(img.width * scale));
+    c.height = Math.max(1, Math.round(img.height * scale));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return await new Promise(resolve => c.toBlob(b => resolve(b || file), 'image/jpeg', qual));
+  } finally { URL.revokeObjectURL(url); }
+}
+function rqBlobParaDataUrl(blob){
+  return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+}
+async function rqEnviarFoto(file, reqId, idx){
+  try{
+    const blob = await rqComprimir(file, 1400, 0.82);
+    const r = ref(storage, `requisicoes/${reqId}/item_${idx}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`);
+    const upload = (async () => { await uploadBytes(r, blob, { contentType: 'image/jpeg' }); return await getDownloadURL(r); })();
+    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000));
+    return await Promise.race([upload, timeout]);
+  }catch(e){
+    // Storage indisponível (ex.: plano gratuito sem Storage): guarda uma versão menor dentro da própria requisição
+    console.warn('Storage indisponível, usando foto embutida', e);
+    const blob = await rqComprimir(file, 800, 0.6);
+    return await rqBlobParaDataUrl(blob);
+  }
+}
+
+async function rqSalvar(){
+  const itens = rqDraft.map(i => ({
+    produto: (i.produto || '').trim(),
+    quantidade: (i.quantidade || '').toString().trim(),
+    unidade: (i.unidade || '').trim() || 'un',
+    referencia: (i.referencia || '').trim(),
+    links: (i.links || []).map(rqSafeUrl).filter(Boolean),
+    photos: [...(i.photos || [])],
+    files: i.files || []
+  })).filter(i => i.produto || i.quantidade || i.referencia || i.links.length || i.photos.length || i.files.length);
+  if(!itens.length){ alert('Adicione pelo menos um item.'); return; }
+  if(itens.some(i => !i.produto)){ alert('Preencha o produto/peça em todos os itens.'); return; }
+  if(itens.some(i => !i.quantidade)){ alert('Preencha a quantidade em todos os itens.'); return; }
+
+  const btn = rq$('rq-save');
+  btn.disabled = true;
+  rq$('rq-form-state').textContent = 'Enviando...';
+  try{
+    const docRef = rqEditingId ? doc(db, 'requisicoes', rqEditingId) : doc(reqRef);
+    for(let i = 0; i < itens.length; i++){
+      for(const f of itens[i].files){ itens[i].photos.push(await rqEnviarFoto(f, docRef.id, i)); }
+      delete itens[i].files;
+    }
+    const tamanho = JSON.stringify(itens).length;
+    if(tamanho > 900000){
+      alert('As fotos ficaram pesadas demais para enviar. Remova algumas fotos ou use fotos menores.');
+      return;
+    }
+    const base = {
+      solicitanteNome: rq$('rq-f-solicitante').value.trim() || (currentUser.email || ''),
+      solicitanteEmail: currentUser.email || '',
+      equipamento: rq$('rq-f-equipamento').value.trim(),
+      prioridade: rq$('rq-f-prio').value,
+      dataNecessaria: rq$('rq-f-data').value || '',
+      observacao: rq$('rq-f-obs').value.trim(),
+      itens,
+      atualizadoEm: new Date().toISOString()
+    };
+    if(rqEditingId){
+      await updateDoc(docRef, base);
+    } else {
+      await setDoc(docRef, { ...base, status: 'nova', createdBy: currentUser.uid, criadoEm: new Date().toISOString() });
+    }
+    rq$('rq-form-overlay').classList.remove('open');
+  }catch(e){
+    console.error(e);
+    alert('Não foi possível salvar. Verifique a conexão e as regras do Firebase.');
+  }finally{
+    btn.disabled = false;
+    rq$('rq-form-state').textContent = '';
+  }
+}
+
+// ---------- detalhe ----------
+function rqAbrirDetalhe(id){
+  const r = requisicoes.find(x => x.id === id);
+  if(!r) return;
+  rqSelectedId = id;
+  const podeEditar = isAdmin || (isRequisitante && r.createdBy === currentUser.uid && (r.status || 'nova') === 'nova');
+  const itensHtml = (r.itens || []).map((it, i) => `
+    <div class="rq-item">
+      <div style="font-weight:700;">${i + 1}. ${escapeHtml(it.produto)}</div>
+      <div style="font-size:12.5px; color:var(--muted); margin-top:3px;">Qtd: ${escapeHtml(it.quantidade)} ${escapeHtml(it.unidade || '')}${it.referencia ? ' · Ref: ' + escapeHtml(it.referencia) : ''}</div>
+      ${(it.links || []).length ? `<div class="rq-links">${it.links.map(u => `<a href="${escapeHtml(u)}" target="_blank" rel="noopener">↗ ${escapeHtml(u)}</a>`).join('')}</div>` : ''}
+      ${(it.photos || []).length ? `<div class="rq-detail-photos">${it.photos.map(u => `<a href="${escapeHtml(u)}" target="_blank" rel="noopener"><img src="${escapeHtml(u)}" alt="Foto"></a>`).join('')}</div>` : ''}
+    </div>`).join('');
+  rq$('rq-detail').innerHTML = `
+    <h2>${escapeHtml((r.itens && r.itens[0] && r.itens[0].produto) || 'Requisição')}${(r.itens || []).length > 1 ? ' + ' + (r.itens.length - 1) + ' item(ns)' : ''}</h2>
+    <div class="rq-detail-grid">
+      <div><div class="lbl">Solicitante</div>${escapeHtml(r.solicitanteNome || '—')}</div>
+      <div><div class="lbl">Equipamento</div>${escapeHtml(r.equipamento || '—')}</div>
+      <div><div class="lbl">Prioridade</div>${escapeHtml(RQ_PRIO[r.prioridade] || RQ_PRIO.normal)}</div>
+      <div><div class="lbl">Necessário até</div>${rqFmtDia(r.dataNecessaria)}</div>
+      <div><div class="lbl">Criada em</div>${rqFmt(r.criadoEm)}</div>
+      <div><div class="lbl">Status</div>${escapeHtml(rqStatusLabel(r.status || 'nova'))}</div>
+    </div>
+    ${r.observacao ? `<div class="field"><label>Observação</label><div style="font-size:13px;">${escapeHtml(r.observacao)}</div></div>` : ''}
+    ${itensHtml}
+    ${isAdmin ? `<div class="field" style="margin-top:12px;"><label>Alterar status</label>
+      <select id="rq-d-status" class="rq-input" style="width:100%;">${RQ_STATUS.map(([v, l]) => `<option value="${v}" ${v === (r.status || 'nova') ? 'selected' : ''}>${l}</option>`).join('')}</select></div>` : ''}
+    <div class="modal-actions" style="flex-wrap:wrap;">
+      ${isAdmin ? '<button class="ghost" id="rq-d-del">Excluir</button><button class="ghost" id="rq-d-cotar">➜ Criar cotação</button>' : ''}
+      ${podeEditar ? '<button class="ghost" id="rq-d-edit">Editar</button>' : ''}
+      <button class="ghost" id="rq-d-close">Fechar</button>
+      ${isAdmin ? '<button class="primary" id="rq-d-save">Salvar status</button>' : ''}
+    </div>`;
+  rq$('rq-d-close').addEventListener('click', () => rq$('rq-detail-overlay').classList.remove('open'));
+  if(podeEditar) rq$('rq-d-edit').addEventListener('click', () => { rq$('rq-detail-overlay').classList.remove('open'); rqAbrirForm(r); });
+  if(isAdmin){
+    rq$('rq-d-save').addEventListener('click', async () => {
+      try{ await updateDoc(doc(db, 'requisicoes', id), { status: rq$('rq-d-status').value, atualizadoEm: new Date().toISOString() }); rq$('rq-detail-overlay').classList.remove('open'); }
+      catch(e){ console.error(e); alert('Não foi possível atualizar o status.'); }
+    });
+    rq$('rq-d-del').addEventListener('click', async () => {
+      if(!confirm('Excluir esta requisição?')) return;
+      try{ await deleteDoc(doc(db, 'requisicoes', id)); rq$('rq-detail-overlay').classList.remove('open'); }
+      catch(e){ console.error(e); alert('Não foi possível excluir.'); }
+    });
+    rq$('rq-d-cotar').addEventListener('click', async () => {
+      rq$('rq-detail-overlay').classList.remove('open');
+      showScreen('painel');
+      openModal(null);
+      const itens = r.itens || [];
+      document.getElementById('f-produto').value = (r.equipamento ? r.equipamento + ' — ' : '') + (itens[0] ? itens[0].produto : 'Requisição') + (itens.length > 1 ? ' (+' + (itens.length - 1) + ' itens)' : '');
+      fornRows = [{ nome:'', preco:'', condicoes:'', fechado:false,
+        produtos: itens.map(i => ({ id: uid('p'), descricao: i.produto, quantidade: i.quantidade, valorUnitario: '' })) }];
+      renderFornRows();
+      if(['nova','recebida'].includes(r.status || 'nova')){
+        try{ await updateDoc(doc(db, 'requisicoes', id), { status: 'cotacao', atualizadoEm: new Date().toISOString() }); }catch(e){ console.error(e); }
+      }
+    });
+  }
+  rq$('rq-detail-overlay').classList.add('open');
+}
+
+rq$('rq-btn-new').addEventListener('click', () => rqAbrirForm(null));
+rq$('rq-add-item').addEventListener('click', () => { rqDraft.push(rqNovoItem()); rqRenderItens(); });
+rq$('rq-cancel').addEventListener('click', () => rq$('rq-form-overlay').classList.remove('open'));
+rq$('rq-save').addEventListener('click', rqSalvar);
+rq$('rq-search').addEventListener('input', renderRequisicoes);
+rq$('rq-filter-prio').addEventListener('change', renderRequisicoes);
+rq$('rq-form-overlay').addEventListener('click', e => { if(e.target === rq$('rq-form-overlay')) rq$('rq-form-overlay').classList.remove('open'); });
+rq$('rq-detail-overlay').addEventListener('click', e => { if(e.target === rq$('rq-detail-overlay')) rq$('rq-detail-overlay').classList.remove('open'); });
+rq$('btn-logout-rq').addEventListener('click', () => signOut(auth));
+rq$('rq-btn-excel').addEventListener('click', () => {
+  const data = rqFiltradas();
+  if(!data.length){ alert('Nenhuma requisição para exportar.'); return; }
+  const linhas = [['Data', 'Status', 'Prioridade', 'Solicitante', 'Equipamento', 'Necessário até', 'Produto', 'Quantidade', 'Unidade', 'Referência', 'Links', 'Observação']];
+  data.forEach(r => (r.itens || [{}]).forEach(i => linhas.push([
+    rqFmt(r.criadoEm), rqStatusLabel(r.status || 'nova'), (RQ_PRIO[r.prioridade] || '').replace(/^\S+\s/, ''), r.solicitanteNome || '', r.equipamento || '',
+    rqFmtDia(r.dataNecessaria), i.produto || '', i.quantidade || '', i.unidade || '', i.referencia || '', (i.links || []).join(' | '), r.observacao || ''
+  ])));
+  exportarExcel('requisicoes-' + new Date().toISOString().slice(0, 10), [{ nome: 'Requisições', linhas }]);
+});
+
+function baixarBlob(blob, nome){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nome;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportarExcel(nomeArquivo, abas){
+  if(window.XLSX){
+    const wb = XLSX.utils.book_new();
+    abas.forEach(ab => {
+      const ws = XLSX.utils.aoa_to_sheet(ab.linhas);
+      ws['!cols'] = ab.linhas[0].map(() => ({wch: 24}));
+      XLSX.utils.book_append_sheet(wb, ws, ab.nome);
+    });
+    XLSX.writeFile(wb, nomeArquivo + '.xlsx');
+  } else {
+    // alternativa: CSV (abre no Excel) caso a biblioteca não tenha carregado
+    const csv = abas[0].linhas.map(l => l.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\r\n');
+    baixarBlob(new Blob(['\ufeff' + csv], {type:'text/csv;charset=utf-8'}), nomeArquivo + '.csv');
+  }
+}
+
+function linhasExcelRelatorio(linhas, totalGasto, totalEconomia){
+  const out = [['Produto', 'Data de aprovação', 'Fornecedor(es) fechado(s)', 'Valor gasto (R$)', 'Economia (R$)']];
+  linhas.forEach(l => out.push([l.produto, l.data ? formatDate(l.data) : '', l.fornecedor, Number(l.valorGasto.toFixed(2)), Number(l.economia.toFixed(2))]));
+  out.push(['TOTAL', '', '', Number(totalGasto.toFixed(2)), Number(totalEconomia.toFixed(2))]);
+  return out;
+}
+
+document.getElementById('rel-btn-excel').addEventListener('click', () => {
+  const { linhas, totalGasto, totalEconomia } = calcLinhasRelatorio(aprovadasDoPeriodo());
+  if(!linhas.length){ alert('Nenhuma cotação aprovada nesse período para exportar.'); return; }
+  const per = rotuloPeriodo().replace('/', '-');
+  exportarExcel('relatorio-economias-' + per, [{ nome: 'Relatório', linhas: linhasExcelRelatorio(linhas, totalGasto, totalEconomia) }]);
+});
+
+document.getElementById('rel-btn-pdf').addEventListener('click', () => {
+  const lista = aprovadasDoPeriodo();
+  const { linhas, totalGasto, totalEconomia } = calcLinhasRelatorio(lista);
+  if(!linhas.length){ alert('Nenhuma cotação aprovada nesse período para exportar.'); return; }
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const trs = linhas.map(l => `<tr>
+    <td>${escapeHtml(l.produto)}</td>
+    <td>${l.data ? formatDate(l.data) : '—'}</td>
+    <td>${escapeHtml(l.fornecedor)}</td>
+    <td>R$ ${formatMoney(l.valorGasto)}</td>
+    <td>${l.economia > 0 ? 'R$ ' + formatMoney(l.economia) : '—'}</td>
+  </tr>`).join('');
+  document.getElementById('print-area').innerHTML = `
+    <h1>Relatório de Economias — ${relModo === 'mensal' ? 'mês ' : 'ano '}${escapeHtml(rotuloPeriodo())}</h1>
+    <div class="print-sub">Emitido em ${hoje}</div>
+    <table>
+      <thead><tr><th>Cotações aprovadas</th><th>Valor gasto (fechado)</th><th>Economia gerada</th></tr></thead>
+      <tbody><tr><td>${linhas.length}</td><td>R$ ${formatMoney(totalGasto)}</td><td>R$ ${formatMoney(totalEconomia)}</td></tr></tbody>
+    </table>
+    <table>
+      <thead><tr><th>Produto</th><th>Data</th><th>Fornecedor fechado</th><th>Valor gasto</th><th>Economia</th></tr></thead>
+      <tbody>${trs}</tbody>
+    </table>
+    <div class="print-footer">Documento gerado pelo Painel de Cotações.</div>
+  `;
+  window.print();
+});
+
+document.getElementById('btn-arquivar').addEventListener('click', async () => {
+  if(!isAdmin) return;
+  const fechadas = cotacoes.filter(c => c.status === 'aprovada' || c.status === 'perdida');
+  const abertas = cotacoes.filter(c => !(c.status === 'aprovada' || c.status === 'perdida'));
+  if(!fechadas.length){ alert('Não há cotações aprovadas ou perdidas para arquivar.'); return; }
+
+  const ano = prompt('Qual ano você está arquivando?', String(new Date().getFullYear()));
+  if(ano === null) return;
+  const anoTxt = ano.trim();
+  if(!/^\d{4}$/.test(anoTxt)){ alert('Ano inválido. Digite 4 dígitos, por exemplo 2026.'); return; }
+
+  const msg = 'Arquivar o ano ' + anoTxt + '?\n\n' +
+    '• ' + fechadas.length + ' cotação(ões) aprovada(s)/perdida(s) serão salvas no arquivo e removidas do painel.\n' +
+    '• ' + abertas.length + ' cotação(ões) em andamento continuam no painel.\n' +
+    '• A "Economia anterior (Excel)" será zerada para o novo ano (o valor fica guardado no arquivo).\n' +
+    '• Um Excel com tudo será baixado agora como segurança.\n\n' +
+    'Isso vale para todo mundo que usa este painel. Continuar?';
+  if(!confirm(msg)) return;
+
+  // 1) Excel de segurança
+  const aprovadas = fechadas.filter(c => c.status === 'aprovada');
+  const r = calcLinhasRelatorio(aprovadas);
+  const itens = [['Cotação', 'Data de aprovação', 'Fornecedor', 'Produto', 'Qtd', 'Valor unitário', 'Desconto (R$)', 'Valor total (R$)']];
+  aprovadas.forEach(c => {
+    fechamentoCotacao(c).itens.forEach(it => {
+      itens.push([c.produto, c.dataAprovacaoISO ? formatDate(c.dataAprovacaoISO) : '', it.forn.nome,
+        it.prod.descricao || c.produto, it.prod.quantidade || '', it.prod.valorUnitario || '',
+        Number(produtoDesconto(it.prod).toFixed(2)), Number(produtoSubtotal(it.prod).toFixed(2))]);
+    });
+  });
+  const abas = [{ nome: 'Aprovadas', linhas: linhasExcelRelatorio(r.linhas, r.totalGasto, r.totalEconomia) }];
+  if(itens.length > 1) abas.push({ nome: 'Itens fechados', linhas: itens });
+  exportarExcel('arquivo-cotacoes-' + anoTxt, abas);
+
+  // 2) Guarda o arquivo na nuvem (documento separado, não mexe no painel atual)
+  try{
+    await setDoc(doc(db, 'painel', 'arquivo-' + anoTxt + '-' + Date.now()), {
+      ano: anoTxt,
+      arquivadoEm: new Date().toISOString(),
+      cotacoes: fechadas,
+      economiaExcel: economiaExcel || 0,
+      metaPessoal: metaPessoal || 0
+    });
+  }catch(e){
+    console.error(e);
+    alert('Não consegui salvar o arquivo na nuvem, então NADA foi apagado do painel. O Excel de segurança já foi baixado. Tente de novo mais tarde.');
+    return;
+  }
+
+  // 3) Limpa o painel para o novo ano
+  cotacoes = abertas;
+  economiaExcel = 0;
+  await saveData();
+  render();
+  alert('Ano ' + anoTxt + ' arquivado! O painel está pronto para o novo ano.');
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  if(confirm('Tem certeza que quer apagar todas as cotações? Isso apaga para todo mundo que usa este painel.')){
+    cotacoes = [];
+    saveData();
+  }
+});
+</script>
+<datalist id="lista-fornecedores-cadastrados"></datalist>
+
+<div id="print-area"></div>
+
+</body>
+</html>
