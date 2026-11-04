@@ -208,6 +208,9 @@
   .rq-detail-photos{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
   .rq-detail-photos img{width:110px; height:110px; object-fit:cover; border-radius:8px; border:1px solid var(--line);}
   .rq-links a{display:block; color:var(--accent); font-size:12.5px; word-break:break-all; margin-top:4px;}
+  .cat-tag{display:inline-block; font-size:10px; font-weight:700; color:var(--accent); background:var(--panel-3); border:1px solid var(--line); border-radius:10px; padding:1px 8px; margin:-2px 0 8px;}
+  .forn-add-row input:nth-child(3){flex:1; min-width:150px;}
+  .fc-cat-input{background:var(--bg); border:1px solid var(--line); color:var(--text); padding:6px 8px; border-radius:6px; font-size:12.5px; width:160px; font-family:inherit;}
   .btn-copy-produtos{
     background:none; border:1px dashed var(--line); color:var(--muted); width:100%;
     padding:6px; border-radius:6px; cursor:pointer; font-size:11.5px; margin-bottom:8px;
@@ -490,6 +493,7 @@
       </div>
       <input type="month" id="rel-mes">
       <input type="number" id="rel-ano" min="2020" max="2100" style="width:90px;">
+      <select id="rel-categoria"><option value="">Todas as categorias</option></select>
       <button class="ghost" id="rel-btn-pdf">⬇ PDF</button>
       <button class="ghost" id="rel-btn-excel">⬇ Excel</button>
     </div>
@@ -512,7 +516,7 @@
 
   <table class="rel-table" id="rel-table">
     <thead>
-      <tr><th>Produto</th><th>Data</th><th>Fornecedor fechado</th><th>Valor gasto</th><th>Economia</th></tr>
+      <tr><th>Produto</th><th>Categoria</th><th>Data</th><th>Fornecedor fechado</th><th>Valor gasto</th><th>Economia</th></tr>
     </thead>
     <tbody id="rel-table-body"></tbody>
   </table>
@@ -548,6 +552,7 @@
     <h2 id="rq-form-title">Nova requisição</h2>
     <div class="field"><label>Solicitante</label><input type="text" id="rq-f-solicitante"></div>
     <div class="field"><label>Equipamento / máquina / veículo</label><input type="text" id="rq-f-equipamento" placeholder="Ex: Trator John Deere 6110, Caminhão Volvo FH..."></div>
+    <div class="field"><label>Categoria</label><input type="text" id="rq-f-categoria" list="lista-categorias" placeholder="Ex: Peças, Insumos, EPI, Pneus..."></div>
     <div class="rq-grid2">
       <div class="field"><label>Prioridade</label>
         <select id="rq-f-prio" class="rq-input" style="width:100%;">
@@ -588,6 +593,7 @@
   <div class="forn-add-row">
     <input type="text" id="fc-nome-input" placeholder="Nome do fornecedor">
     <input type="text" id="fc-contato-input" placeholder="Contato (telefone, e-mail...) — opcional">
+    <input type="text" id="fc-categoria-input" list="lista-categorias" placeholder="Categoria (ex: Peças, EPI)">
     <button class="primary" id="fc-btn-add">+ Adicionar</button>
   </div>
 
@@ -662,6 +668,10 @@
       <input type="text" id="f-produto" placeholder="Ex: Defensivo X 200L">
     </div>
     <div class="field">
+      <label>Categoria</label>
+      <input type="text" id="f-categoria" list="lista-categorias" placeholder="Ex: Peças, Insumos, EPI, Pneus...">
+    </div>
+    <div class="field">
       <label>Prazo de resposta</label>
       <input type="date" id="f-prazo">
     </div>
@@ -705,8 +715,8 @@ import {
 // =====================================================================
 // CONFIGURAÇÃO DA EMPRESA — é só isto que muda de um cliente para outro
 // =====================================================================
-// 1) UID do comprador/administrador (único que altera cotações). Firebase > Authentication > Usuários
-const ADMIN_UID = "S7vL8vk4QjRHIAELHMYUbAXoLJj2";
+// 1) UIDs dos administradores (quem altera cotações). Firebase > Authentication > Usuários
+const ADMIN_UIDS = ["S7vL8vk4QjRHIAELHMYUbAXoLJj2"];
 // 2) UIDs de quem só enxerga o módulo Requisições (nada de Cotações) — pode deixar vazio: []
 const REQUISITANTE_UIDS = [];
 // 3) Chaves do projeto Firebase da empresa (Firebase > Configurações do projeto > Seus apps)
@@ -739,7 +749,7 @@ onAuthStateChanged(auth, (user) => {
   const relatoriosScreen = document.getElementById('relatorios-screen');
   currentUser = user || null;
   if(user){
-    isAdmin = user.uid === ADMIN_UID;
+    isAdmin = ADMIN_UIDS.includes(user.uid);
     isRequisitante = REQUISITANTE_UIDS.includes(user.uid);
     document.body.classList.toggle('readonly-mode', !isAdmin);
     ['menu-btn-painel','menu-btn-relatorios','menu-btn-fornecedores'].forEach(id => {
@@ -793,14 +803,41 @@ document.getElementById('back-to-menu-fornecedores').addEventListener('click', (
 // ---- Cadastro de fornecedores ----
 function normalizarNome(n){ return (n || '').trim().toLowerCase(); }
 
-function registrarFornecedorSeNovo(nome, admin){
+function registrarFornecedorSeNovo(nome, admin, categoria){
   if(!admin) return; // só admin escreve
   const nomeTrim = (nome || '').trim();
   if(!nomeTrim) return;
   const jaExiste = fornecedoresCadastrados.some(f => normalizarNome(f.nome) === normalizarNome(nomeTrim));
   if(!jaExiste){
-    fornecedoresCadastrados.push({ id: uid('fc'), nome: nomeTrim, contato: '' });
+    fornecedoresCadastrados.push({ id: uid('fc'), nome: nomeTrim, contato: '', categoria: (categoria || '').trim() });
+  } else if(categoria){
+    const f = fornecedoresCadastrados.find(x => normalizarNome(x.nome) === normalizarNome(nomeTrim));
+    if(f && !(f.categoria || '').trim()) f.categoria = categoria.trim();
   }
+}
+
+function normCat(c){ return (c || '').trim().toLowerCase(); }
+function todasCategorias(){
+  const mapa = {};
+  const add = c => { const t = (c || '').trim(); if(t && !mapa[normCat(t)]) mapa[normCat(t)] = t; };
+  cotacoes.forEach(c => add(c.categoria));
+  fornecedoresCadastrados.forEach(f => add(f.categoria));
+  requisicoes.forEach(r => add(r.categoria));
+  return Object.values(mapa).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+function atualizarDatalistCategorias(){
+  const dl = document.getElementById('lista-categorias');
+  if(!dl) return;
+  dl.innerHTML = todasCategorias().map(c => `<option value="${escapeHtml(c)}">`).join('');
+}
+function atualizarFiltroCategorias(){
+  const sel = document.getElementById('rel-categoria');
+  if(!sel) return;
+  const atual = sel.value;
+  sel.innerHTML = '<option value="">Todas as categorias</option>'
+    + todasCategorias().map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')
+    + '<option value="__sem__">Sem categoria</option>';
+  sel.value = [...sel.options].some(o => o.value === atual) ? atual : '';
 }
 
 function atualizarDatalistFornecedores(){
@@ -831,8 +868,13 @@ function renderFornecedoresCadastro(){
           <div class="fc-nome">${escapeHtml(f.nome)}</div>
           ${f.contato ? `<div class="fc-contato">${escapeHtml(f.contato)}</div>` : ''}
         </div>
+        <input type="text" class="fc-cat-input" list="lista-categorias" placeholder="Categoria" value="${escapeHtml(f.categoria || '')}" ${isAdmin ? '' : 'disabled'}>
         <button class="fc-del" data-id="${f.id}" title="Remover">×</button>
       `;
+      item.querySelector('.fc-cat-input').addEventListener('change', (e) => {
+        f.categoria = e.target.value.trim();
+        saveData();
+      });
       item.querySelector('.fc-del').addEventListener('click', () => {
         fornecedoresCadastrados = fornecedoresCadastrados.filter(x => x.id !== f.id);
         saveData();
@@ -852,10 +894,11 @@ document.getElementById('fc-btn-add').addEventListener('click', () => {
     alert('Esse fornecedor já está cadastrado.');
     return;
   }
-  fornecedoresCadastrados.push({ id: uid('fc'), nome, contato: contatoInput.value.trim() });
+  fornecedoresCadastrados.push({ id: uid('fc'), nome, contato: contatoInput.value.trim(), categoria: document.getElementById('fc-categoria-input').value.trim() });
   saveData();
   nomeInput.value = '';
   contatoInput.value = '';
+  document.getElementById('fc-categoria-input').value = '';
   renderFornecedoresCadastro();
 });
 
@@ -893,6 +936,7 @@ document.getElementById('rel-btn-anual').addEventListener('click', () => {
 });
 document.getElementById('rel-mes').addEventListener('change', renderRelatorio);
 document.getElementById('rel-ano').addEventListener('change', renderRelatorio);
+document.getElementById('rel-categoria').addEventListener('change', renderRelatorio);
 document.getElementById('rel-ano').style.display = 'none';
 
 function calcLinhasRelatorio(lista){
@@ -908,6 +952,7 @@ function calcLinhasRelatorio(lista){
     totalEconomia += economia;
     linhas.push({
       produto: c.produto,
+      categoria: c.categoria || '',
       data: c.dataAprovacaoISO,
       fornecedor: fc.nomes.length ? fc.nomes.join(', ') : '—',
       valorGasto,
@@ -923,6 +968,8 @@ function aprovadasDoPeriodo(){
   const anoFiltro = document.getElementById('rel-ano').value; // "YYYY"
   return cotacoes.filter(c => {
     if(c.status !== 'aprovada' || !c.dataAprovacaoISO) return false;
+    const catSel = (document.getElementById('rel-categoria') || {}).value || '';
+    if(catSel === '__sem__' ? !!(c.categoria || '').trim() : (catSel && normCat(c.categoria) !== normCat(catSel))) return false;
     if(relModo === 'mensal'){
       return mesFiltro && c.dataAprovacaoISO.startsWith(mesFiltro);
     } else {
@@ -942,6 +989,7 @@ function rotuloPeriodo(){
 }
 
 function renderRelatorio(){
+  atualizarFiltroCategorias();
   const aprovadasNoPeriodo = aprovadasDoPeriodo();
   const { linhas, totalGasto, totalEconomia } = calcLinhasRelatorio(aprovadasNoPeriodo);
 
@@ -963,6 +1011,7 @@ function renderRelatorio(){
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${escapeHtml(l.produto)}</td>
+        <td>${escapeHtml(l.categoria || '—')}</td>
         <td>${formatDate(l.data)}</td>
         <td>${escapeHtml(l.fornecedor)}</td>
         <td>R$ ${formatMoney(l.valorGasto)}</td>
@@ -1188,6 +1237,7 @@ function render(){
           <button class="del" data-id="${c.id}" title="Excluir">×</button>
         </div>
         <div class="produto">${escapeHtml(c.produto)}</div>
+        ${c.categoria ? `<div class="cat-tag">${escapeHtml(c.categoria)}</div>` : ''}
         <div class="fornecedores">${fornHtml}</div>
         ${savingHtml}
         <div class="meta">
@@ -1249,6 +1299,7 @@ function render(){
   renderStats();
   renderMeta();
   atualizarDatalistFornecedores();
+  atualizarDatalistCategorias();
   if(typeof renderRelatorio === 'function'){
     try{ renderRelatorio(); }catch(e){}
   }
@@ -1441,7 +1492,14 @@ function renderFornRows(){
       </div>
     `;
 
-    div.querySelector('.forn-nome-input').addEventListener('input', (e) => row.nome = e.target.value);
+    div.querySelector('.forn-nome-input').addEventListener('input', (e) => {
+      row.nome = e.target.value;
+      const campoCat = document.getElementById('f-categoria');
+      if(campoCat && !campoCat.value.trim()){
+        const cad = fornecedoresCadastrados.find(f => normalizarNome(f.nome) === normalizarNome(row.nome));
+        if(cad && cad.categoria) campoCat.value = cad.categoria;
+      }
+    });
 
     const atualizarTotais = (pIdx) => {
       recalcFornTotal(row);
@@ -1800,6 +1858,7 @@ function openModal(id){
   const c = id ? cotacoes.find(x => x.id === id) : null;
   document.getElementById('modal-title').textContent = c ? 'Editar cotação' : 'Nova cotação';
   document.getElementById('f-produto').value = c ? c.produto : '';
+  document.getElementById('f-categoria').value = c ? (c.categoria || '') : '';
   document.getElementById('f-prazo').value = c ? (c.prazo || '') : '';
   document.getElementById('f-preco-negociado').value = c ? (c.precoNegociado || '') : '';
   document.getElementById('f-data-aprovacao').value = c ? (c.dataAprovacaoISO || '') : '';
@@ -1860,7 +1919,8 @@ document.getElementById('btn-save').addEventListener('click', () => {
       };
     });
 
-  fornecedores.forEach(f => registrarFornecedorSeNovo(f.nome, isAdmin));
+  const categoria = document.getElementById('f-categoria').value.trim();
+  fornecedores.forEach(f => registrarFornecedorSeNovo(f.nome, isAdmin, categoria));
 
   const prazo = document.getElementById('f-prazo').value;
   const precoNegociado = document.getElementById('f-preco-negociado').value.trim();
@@ -1869,6 +1929,7 @@ document.getElementById('btn-save').addEventListener('click', () => {
   if(editingId){
     const c = cotacoes.find(x => x.id === editingId);
     c.produto = produto;
+    c.categoria = categoria;
     c.prazo = prazo;
     c.fornecedores = fornecedores;
     c.precoNegociado = precoNegociado;
@@ -1877,6 +1938,7 @@ document.getElementById('btn-save').addEventListener('click', () => {
     cotacoes.push({
       id: uid(),
       produto,
+      categoria,
       prazo,
       fornecedores,
       precoNegociado,
@@ -1984,6 +2046,7 @@ function rqFiltradas(){
 }
 
 function renderRequisicoes(){
+  atualizarDatalistCategorias();
   const data = rqFiltradas();
   rq$('rq-board').innerHTML = RQ_STATUS.map(([st, label]) => {
     const arr = data.filter(r => (r.status || 'nova') === st);
@@ -1995,6 +2058,7 @@ function renderRequisicoes(){
         <div class="produto">${txt || 'Requisição sem item'}</div>
         <div class="rq-meta">
           <div><strong>Equipamento:</strong> ${escapeHtml(r.equipamento || 'Não informado')}</div>
+          ${r.categoria ? `<div><strong>Categoria:</strong> ${escapeHtml(r.categoria)}</div>` : ''}
           <div><strong>Solicitante:</strong> ${escapeHtml(r.solicitanteNome || '—')}</div>
           <div><strong>Necessário até:</strong> ${rqFmtDia(r.dataNecessaria)}</div>
         </div>
@@ -2066,6 +2130,7 @@ function rqAbrirForm(r){
   rq$('rq-form-title').textContent = r ? 'Editar requisição' : 'Nova requisição';
   rq$('rq-f-solicitante').value = r ? (r.solicitanteNome || '') : ((currentUser && currentUser.email) || '');
   rq$('rq-f-equipamento').value = r ? (r.equipamento || '') : '';
+  rq$('rq-f-categoria').value = r ? (r.categoria || '') : '';
   rq$('rq-f-prio').value = r ? (r.prioridade || 'normal') : 'normal';
   rq$('rq-f-data').value = r ? (r.dataNecessaria || '') : '';
   rq$('rq-f-obs').value = r ? (r.observacao || '') : '';
@@ -2139,6 +2204,7 @@ async function rqSalvar(){
       solicitanteNome: rq$('rq-f-solicitante').value.trim() || (currentUser.email || ''),
       solicitanteEmail: currentUser.email || '',
       equipamento: rq$('rq-f-equipamento').value.trim(),
+      categoria: rq$('rq-f-categoria').value.trim(),
       prioridade: rq$('rq-f-prio').value,
       dataNecessaria: rq$('rq-f-data').value || '',
       observacao: rq$('rq-f-obs').value.trim(),
@@ -2178,6 +2244,7 @@ function rqAbrirDetalhe(id){
     <div class="rq-detail-grid">
       <div><div class="lbl">Solicitante</div>${escapeHtml(r.solicitanteNome || '—')}</div>
       <div><div class="lbl">Equipamento</div>${escapeHtml(r.equipamento || '—')}</div>
+      <div><div class="lbl">Categoria</div>${escapeHtml(r.categoria || '—')}</div>
       <div><div class="lbl">Prioridade</div>${escapeHtml(RQ_PRIO[r.prioridade] || RQ_PRIO.normal)}</div>
       <div><div class="lbl">Necessário até</div>${rqFmtDia(r.dataNecessaria)}</div>
       <div><div class="lbl">Criada em</div>${rqFmt(r.criadoEm)}</div>
@@ -2210,6 +2277,7 @@ function rqAbrirDetalhe(id){
       showScreen('painel');
       openModal(null);
       const itens = r.itens || [];
+      document.getElementById('f-categoria').value = r.categoria || '';
       document.getElementById('f-produto').value = (r.equipamento ? r.equipamento + ' — ' : '') + (itens[0] ? itens[0].produto : 'Requisição') + (itens.length > 1 ? ' (+' + (itens.length - 1) + ' itens)' : '');
       fornRows = [{ nome:'', preco:'', condicoes:'', fechado:false,
         produtos: itens.map(i => ({ id: uid('p'), descricao: i.produto, quantidade: i.quantidade, valorUnitario: '' })) }];
@@ -2234,9 +2302,9 @@ rq$('btn-logout-rq').addEventListener('click', () => signOut(auth));
 rq$('rq-btn-excel').addEventListener('click', () => {
   const data = rqFiltradas();
   if(!data.length){ alert('Nenhuma requisição para exportar.'); return; }
-  const linhas = [['Data', 'Status', 'Prioridade', 'Solicitante', 'Equipamento', 'Necessário até', 'Produto', 'Quantidade', 'Unidade', 'Referência', 'Links', 'Observação']];
+  const linhas = [['Data', 'Status', 'Prioridade', 'Solicitante', 'Equipamento', 'Categoria', 'Necessário até', 'Produto', 'Quantidade', 'Unidade', 'Referência', 'Links', 'Observação']];
   data.forEach(r => (r.itens || [{}]).forEach(i => linhas.push([
-    rqFmt(r.criadoEm), rqStatusLabel(r.status || 'nova'), (RQ_PRIO[r.prioridade] || '').replace(/^\S+\s/, ''), r.solicitanteNome || '', r.equipamento || '',
+    rqFmt(r.criadoEm), rqStatusLabel(r.status || 'nova'), (RQ_PRIO[r.prioridade] || '').replace(/^\S+\s/, ''), r.solicitanteNome || '', r.equipamento || '', r.categoria || '',
     rqFmtDia(r.dataNecessaria), i.produto || '', i.quantidade || '', i.unidade || '', i.referencia || '', (i.links || []).join(' | '), r.observacao || ''
   ])));
   exportarExcel('requisicoes-' + new Date().toISOString().slice(0, 10), [{ nome: 'Requisições', linhas }]);
@@ -2270,9 +2338,9 @@ function exportarExcel(nomeArquivo, abas){
 }
 
 function linhasExcelRelatorio(linhas, totalGasto, totalEconomia){
-  const out = [['Produto', 'Data de aprovação', 'Fornecedor(es) fechado(s)', 'Valor gasto (R$)', 'Economia (R$)']];
-  linhas.forEach(l => out.push([l.produto, l.data ? formatDate(l.data) : '', l.fornecedor, Number(l.valorGasto.toFixed(2)), Number(l.economia.toFixed(2))]));
-  out.push(['TOTAL', '', '', Number(totalGasto.toFixed(2)), Number(totalEconomia.toFixed(2))]);
+  const out = [['Produto', 'Categoria', 'Data de aprovação', 'Fornecedor(es) fechado(s)', 'Valor gasto (R$)', 'Economia (R$)']];
+  linhas.forEach(l => out.push([l.produto, l.categoria || '', l.data ? formatDate(l.data) : '', l.fornecedor, Number(l.valorGasto.toFixed(2)), Number(l.economia.toFixed(2))]));
+  out.push(['TOTAL', '', '', '', Number(totalGasto.toFixed(2)), Number(totalEconomia.toFixed(2))]);
   return out;
 }
 
@@ -2290,6 +2358,7 @@ document.getElementById('rel-btn-pdf').addEventListener('click', () => {
   const hoje = new Date().toLocaleDateString('pt-BR');
   const trs = linhas.map(l => `<tr>
     <td>${escapeHtml(l.produto)}</td>
+    <td>${escapeHtml(l.categoria || '—')}</td>
     <td>${l.data ? formatDate(l.data) : '—'}</td>
     <td>${escapeHtml(l.fornecedor)}</td>
     <td>R$ ${formatMoney(l.valorGasto)}</td>
@@ -2297,13 +2366,13 @@ document.getElementById('rel-btn-pdf').addEventListener('click', () => {
   </tr>`).join('');
   document.getElementById('print-area').innerHTML = `
     <h1>Relatório de Economias — ${relModo === 'mensal' ? 'mês ' : 'ano '}${escapeHtml(rotuloPeriodo())}</h1>
-    <div class="print-sub">Emitido em ${hoje}</div>
+    <div class="print-sub">Emitido em ${hoje}${(document.getElementById('rel-categoria') || {}).value ? ' · Categoria: ' + (document.getElementById('rel-categoria').value === '__sem__' ? 'Sem categoria' : escapeHtml(document.getElementById('rel-categoria').value)) : ''}</div>
     <table>
       <thead><tr><th>Cotações aprovadas</th><th>Valor gasto (fechado)</th><th>Economia gerada</th></tr></thead>
       <tbody><tr><td>${linhas.length}</td><td>R$ ${formatMoney(totalGasto)}</td><td>R$ ${formatMoney(totalEconomia)}</td></tr></tbody>
     </table>
     <table>
-      <thead><tr><th>Produto</th><th>Data</th><th>Fornecedor fechado</th><th>Valor gasto</th><th>Economia</th></tr></thead>
+      <thead><tr><th>Produto</th><th>Categoria</th><th>Data</th><th>Fornecedor fechado</th><th>Valor gasto</th><th>Economia</th></tr></thead>
       <tbody>${trs}</tbody>
     </table>
     <div class="print-footer">Documento gerado pelo Painel de Cotações.</div>
@@ -2376,6 +2445,7 @@ document.getElementById('btn-reset').addEventListener('click', () => {
 });
 </script>
 <datalist id="lista-fornecedores-cadastrados"></datalist>
+<datalist id="lista-categorias"></datalist>
 
 <div id="print-area"></div>
 
